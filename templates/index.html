@@ -1116,6 +1116,9 @@
 
         if (!res.ok) throw new Error(data.error || "Terjadi kesalahan.");
 
+        // Preview di atas tidak diperlukan lagi: hasil sudah menampilkan
+        // gambar ASLI + HASIL DETEKSI berdampingan.
+        preview.style.display = "none";
         renderResult(data);
       } catch (err) {
         showError(err.message);
