@@ -74,7 +74,7 @@ restart, model kembali ke default — pilih ulang file `.pt`-nya.
 Contoh:
 
 ```powershell
-curl.exe -X POST -F "image=@street.jpg" -F "conf=0.25" http://127.0.0.1:5000/api/detect
+curl.exe -X POST -F "image=@gambar.jpg" -F "conf=0.25" http://127.0.0.1:5000/api/detect
 ```
 
 Response:
