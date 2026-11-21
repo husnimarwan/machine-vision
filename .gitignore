@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+runs/
+static/uploads/
+static/results/
+models/
+yoloWeight/
+self_note_ignore/
+server.log
+server.err.log
+*.log
+
+# File besar / artefak uji — jangan ikut ke repo
+MiSEL in Allpack Exhibition 2025 - JIEXPO Jakarta.mp4
+_test.mp4
+_verify_playing.png

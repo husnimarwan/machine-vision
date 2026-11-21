@@ -1,0 +1,3366 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark light" />
+  <title>Object Detection — YOLO</title>
+  <script>
+    // Set tema sebelum render supaya tidak ada kedip (FOUC)
+    (function () {
+      var theme = "dark";
+      try {
+        theme = localStorage.getItem("theme") ||
+          (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+      } catch (e) { /* localStorage bisa diblokir */ }
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <style>
+    /* ================= TEMA ================= */
+    :root,
+    :root[data-theme="dark"] {
+      --bg: #0f1117;
+      --bg-glow: #1b2130;
+      --panel: #171a23;
+      --panel-2: #1f2431;
+      --panel-3: #1b2436;
+      --border: #2b3242;
+      --text: #e8ecf4;
+      --muted: #8b95a9;
+      --accent: #4f8cff;
+      --accent-2: #22c55e;
+      --danger: #ef4444;
+      --chip-bg: rgba(79, 140, 255, .12);
+      --chip-border: rgba(79, 140, 255, .35);
+      --chip-text: #b9d1ff;
+      --chip-strong: #fff;
+      --err-bg: rgba(239, 68, 68, .12);
+      --err-border: rgba(239, 68, 68, .4);
+      --err-text: #ffc9c9;
+      --warn-bg: rgba(245, 158, 11, .12);
+      --warn-border: rgba(245, 158, 11, .4);
+      --warn-text: #ffdca8;
+      --shadow: none;
+      --video-bg: #000;
+      --on-accent: #fff;
+    }
+
+    :root[data-theme="light"] {
+      --bg: #f4f6fb;
+      --bg-glow: #ffffff;
+      --panel: #ffffff;
+      --panel-2: #f1f4fa;
+      --panel-3: #e8eefb;
+      --border: #d7dfec;
+      --text: #16202f;
+      --muted: #5f6b80;
+      --accent: #2563eb;
+      --accent-2: #16a34a;
+      --danger: #dc2626;
+      --chip-bg: rgba(37, 99, 235, .10);
+      --chip-border: rgba(37, 99, 235, .30);
+      --chip-text: #1d4ed8;
+      --chip-strong: #0f172a;
+      --err-bg: rgba(220, 38, 38, .08);
+      --err-border: rgba(220, 38, 38, .35);
+      --err-text: #b91c1c;
+      --warn-bg: rgba(245, 158, 11, .14);
+      --warn-border: rgba(217, 119, 6, .45);
+      --warn-text: #92400e;
+      --shadow: 0 6px 24px rgba(16, 32, 64, .08);
+      --video-bg: #000;
+      --on-accent: #fff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(1200px 600px at 50% -10%, var(--bg-glow) 0%, var(--bg) 60%);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      padding: 32px 20px 64px;
+      transition: background-color .2s ease, color .2s ease;
+    }
+
+    .wrap { max-width: 1080px; margin: 0 auto; }
+
+    header { text-align: center; margin-bottom: 28px; }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.9rem;
+      letter-spacing: -0.5px;
+    }
+
+    h1 span { color: var(--accent); }
+
+    .sub { color: var(--muted); font-size: 0.95rem; margin: 0; }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      transition: background-color .2s ease, border-color .2s ease;
+    }
+
+    /* ---------- Dropzone ---------- */
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .18s, background .18s;
+      background: var(--panel-2);
+    }
+
+    .dropzone:hover, .dropzone.drag {
+      border-color: var(--accent);
+      background: var(--panel-3);
+    }
+
+    .dropzone svg { opacity: .75; margin-bottom: 10px; }
+
+    .dropzone strong { display: block; margin-bottom: 4px; }
+
+    .dropzone small { color: var(--muted); }
+
+    #fileInput { display: none; }
+
+    /* ---------- Controls ---------- */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .slider-group { flex: 1 1 260px; }
+
+    .slider-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .slider-group label b { color: var(--text); }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    button {
+      font: inherit;
+      font-weight: 600;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 22px;
+      cursor: pointer;
+      transition: transform .12s, opacity .12s;
+      background: var(--accent);
+      color: #fff;
+    }
+
+    button:hover:not(:disabled) { transform: translateY(-1px); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+
+    button.ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    /* Tombol tema punya gaya sendiri (lihat .theme-toggle) */
+    button.theme-toggle {
+      padding: 0;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    button.theme-toggle:hover { transform: translateY(-1px); }
+
+    /* ---------- Preview ---------- */
+    #preview {
+      margin-top: 18px;
+      display: none;
+      text-align: center;
+    }
+
+    #preview img {
+      max-width: 100%;
+      max-height: 320px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    /* ---------- Result ---------- */
+    #result { display: none; margin-top: 24px; }
+
+    /* Hasil deteksi gambar dari link URL (di dalam panel URL) */
+    #urlResult { display: none; margin-top: 24px; }
+
+    .result-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .result-head h2 { margin: 0; font-size: 1.15rem; }
+
+    .pill {
+      font-size: 0.78rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .images {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+    }
+
+    .images figure { margin: 0; }
+
+    .images img {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: block;
+    }
+
+    .images figcaption {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 6px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; }
+
+    .chip {
+      font-size: 0.82rem;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: var(--chip-bg);
+      border: 1px solid var(--chip-border);
+      color: var(--chip-text);
+    }
+
+    .chip b { color: var(--chip-strong); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      font-size: 0.88rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    tbody tr:hover { background: var(--panel-2); }
+
+    .bar-cell { width: 120px; }
+
+    .bar {
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent-2), var(--accent));
+    }
+
+    .error {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: var(--err-bg);
+      border: 1px solid var(--err-border);
+      color: var(--err-text);
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      display: inline-block;
+      vertical-align: -3px;
+      margin-right: 8px;
+      animation: spin .7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---------- Tabs ---------- */
+    .tabs {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      margin: 0 auto 18px;
+    }
+
+    .tab {
+      font: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 9px 20px;
+      border-radius: 9px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background .15s, color .15s;
+      transform: none;
+    }
+
+    .tab:hover { color: var(--text); }
+
+    .tab.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .tab.active:hover { transform: none; }
+
+    .tabs-row { display: flex; justify-content: center; }
+
+    /* ---------- Realtime video player ---------- */
+    .player {
+      position: relative;
+      margin-top: 18px;
+      display: none;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #000;
+    }
+
+    /* Video asli dipakai sebagai sumber frame, canvas yang ditampilkan */
+    .player video { display: none; }
+
+    /* Stream kamera server (MJPEG) juga disembunyikan; canvas yang tampil */
+    .player img { display: none; }
+
+    .player canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #000;
+    }
+
+    .player .badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, .6);
+      color: #fff;
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .player .badge .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-2);
+    }
+
+    .player .badge.paused .dot { background: #f59e0b; }
+
+    /* ---------- Playback bar ---------- */
+    .playback {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    .playback button {
+      padding: 10px 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .playback button svg { display: block; }
+
+    .seek-group {
+      flex: 1 1 240px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .seek-group input[type="range"] { flex: 1; }
+
+    .time-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .fps-select {
+      font: inherit;
+      font-size: 0.85rem;
+      padding: 9px 10px;
+      border-radius: 10px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+      align-items: center;
+    }
+
+    /* ---------- Kamera ---------- */
+    .select-group { flex: 1 1 240px; min-width: 0; }
+
+    .select-group label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .select-row { display: flex; gap: 8px; }
+
+    .select-row select { flex: 1; min-width: 0; }
+
+    .select-row button.icon-btn {
+      padding: 0 12px;
+      display: grid;
+      place-items: center;
+    }
+
+    .select-row button.icon-btn svg { display: block; }
+
+    /* Placeholder saat kamera belum aktif */
+    .cam-placeholder {
+      margin-top: 18px;
+      padding: 40px 20px;
+      text-align: center;
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      background: var(--panel-2);
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    .cam-placeholder b { color: var(--text); }
+
+    /* Status izin kamera: hanya muncul kalau perlu tindakan */
+    .cam-status-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .cam-status {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .cam-status b { color: var(--text); font-weight: 600; }
+
+    button.cam-perm-btn {
+      font-size: 0.78rem;
+      padding: 7px 12px;
+      border-radius: 9px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ---------- Pemilih model YOLO per tab ---------- */
+    .model-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel-2);
+      font-size: 0.82rem;
+    }
+
+    .model-bar label {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .model-bar select {
+      font: inherit;
+      font-size: 0.82rem;
+      padding: 7px 9px;
+      border-radius: 8px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      max-width: 260px;
+      cursor: pointer;
+    }
+
+    .model-bar button {
+      padding: 7px 12px;
+      font-size: 0.78rem;
+      border-radius: 8px;
+    }
+
+    .model-bar .model-info {
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    /* ---------- Input URL ---------- */
+    .url-group { flex: 1 1 420px; min-width: 0; }
+
+    .url-group label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .url-input {
+      width: 100%;
+      font: inherit;
+      font-size: 0.9rem;
+      padding: 11px 12px;
+      border-radius: 10px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .url-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .url-input::placeholder { color: var(--muted); }
+
+    .pill.truncate {
+      max-width: 420px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Titik LIVE berdenyut selama deteksi kamera berjalan */
+    .player .badge.live .dot { animation: pulse 1.3s ease-in-out infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: .35; transform: scale(.8); }
+    }
+
+    /* ---------- Catatan ---------- */
+    .note {
+      margin-top: 12px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .note code {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 1px 5px;
+      font-size: 0.8rem;
+    }
+
+    .warn {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-border);
+      color: var(--warn-text);
+      font-size: 0.85rem;
+      display: none;
+    }
+
+    /* ---------- Theme toggle ---------- */
+    .theme-toggle {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 50;
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      transition: background-color .18s, border-color .18s, color .18s, transform .12s;
+    }
+
+    .theme-toggle:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .theme-toggle svg { display: block; }
+
+    /* Tampilkan ikon matahari di dark mode, bulan di light mode */
+    .theme-toggle .icon-sun { display: block; }
+    .theme-toggle .icon-moon { display: none; }
+
+    :root[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-moon { display: block; }
+
+  </style>
+</head>
+<body>
+  <button class="theme-toggle" id="themeToggle" type="button"
+          title="Ganti tema" aria-label="Ganti tema terang/gelap">
+    <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4.2" />
+      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.1 5.1l1.4 1.4M17.5 17.5l1.4 1.4M18.9 5.1l-1.4 1.4M6.5 17.5l-1.4 1.4" />
+    </svg>
+    <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 13.2A8.5 8.5 0 1 1 10.8 3a7 7 0 0 0 10.2 10.2Z" />
+    </svg>
+  </button>
+
+  <div class="wrap">
+    <header>
+      <h1>Object <span>Detection</span></h1>
+      <p class="sub">Deteksi objek pada gambar, video, kamera, atau link dengan model YOLO.</p>
+    </header>
+
+    <div class="tabs-row">
+      <div class="tabs" role="tablist">
+        <button class="tab active" id="tabImage" role="tab" aria-selected="true">Gambar</button>
+        <button class="tab" id="tabVideo" role="tab" aria-selected="false">Video</button>
+        <button class="tab" id="tabCamera" role="tab" aria-selected="false">Kamera</button>
+        <button class="tab" id="tabUrl" role="tab" aria-selected="false">URL</button>
+      </div>
+    </div>
+
+    <!-- ============ PANEL GAMBAR ============ -->
+    <section class="card" id="panelImage">
+      <div class="model-bar">
+        <label for="imageModel">Model YOLO</label>
+        <select id="imageModel"></select>
+        <button class="ghost" id="imageModelBtn" type="button">Pilih file .pt…</button>
+        <input type="file" id="imageModelFile" accept=".pt" hidden />
+        <span class="model-info" id="imageModelInfo">yolo26n.pt (bawaan)</span>
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+        <strong>Klik atau drag &amp; drop gambar</strong>
+        <small>JPG, PNG, BMP, WEBP — maksimal 16 MB</small>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" />
+
+      <div id="preview">
+        <img id="previewImg" alt="Preview gambar" />
+      </div>
+
+      <div class="controls">
+        <div class="slider-group">
+          <label for="conf">
+            <span>Confidence threshold</span>
+            <b id="confValue">0.25</b>
+          </label>
+          <input type="range" id="conf" min="0.05" max="0.95" step="0.05" value="0.25" />
+        </div>
+        <button id="detectBtn" disabled>Deteksi Objek</button>
+        <button class="ghost" id="resetBtn" type="button">Reset</button>
+      </div>
+
+      <div class="error" id="error"></div>
+
+      <section id="result">
+        <div class="result-head">
+          <h2>Hasil Deteksi</h2>
+          <span class="pill" id="pillTotal"></span>
+          <span class="pill" id="pillTime"></span>
+          <span class="pill" id="pillConf"></span>
+        </div>
+
+        <div class="images">
+          <figure>
+            <img id="imgOriginal" alt="Gambar asli" />
+            <figcaption>Asli</figcaption>
+          </figure>
+          <figure>
+            <img id="imgAnnotated" alt="Gambar hasil deteksi" />
+            <figcaption>Hasil Deteksi</figcaption>
+          </figure>
+        </div>
+
+        <div class="chips" id="chips"></div>
+
+        <table id="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Objek</th>
+              <th>Confidence</th>
+              <th class="bar-cell"></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </section>
+    </section>
+
+    <!-- ============ PANEL VIDEO ============ -->
+    <section class="card" id="panelVideo" style="display:none">
+      <div class="model-bar">
+        <label for="videoModel">Model YOLO</label>
+        <select id="videoModel"></select>
+        <button class="ghost" id="videoModelBtn" type="button">Pilih file .pt…</button>
+        <input type="file" id="videoModelFile" accept=".pt" hidden />
+        <span class="model-info" id="videoModelInfo">yolo26n.pt (bawaan)</span>
+      </div>
+
+      <div class="dropzone" id="videoDropzone">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="6" width="14" height="12" rx="2" />
+          <polygon points="22 8 16 12 22 16 22 8" />
+        </svg>
+        <strong>Klik atau drag &amp; drop video</strong>
+        <small>MP4, AVI, MOV, MKV, WEBM, M4V</small>
+      </div>
+      <input type="file" id="videoInput" accept="video/*" />
+
+      <div class="controls">
+        <div class="slider-group">
+          <label for="videoConf">
+            <span>Confidence threshold</span>
+            <b id="videoConfValue">0.25</b>
+          </label>
+          <input type="range" id="videoConf" min="0.05" max="0.95" step="0.05" value="0.25" />
+        </div>
+        <button id="detectVideoBtn" disabled>Mulai Deteksi</button>
+        <button class="ghost" id="resetVideoBtn" type="button">Reset</button>
+      </div>
+
+      <!-- Player realtime: video asli disembunyikan, canvas yang tampil -->
+      <div class="player" id="player">
+        <video id="srcVideo" muted playsinline preload="auto"></video>
+        <canvas id="canvas"></canvas>
+        <div class="badge" id="playerBadge">
+          <span class="dot"></span><span id="badgeText">Siap</span>
+        </div>
+      </div>
+
+      <div class="playback" id="playback">
+        <button id="playPauseBtn" type="button" title="Play / Pause (Spasi)">
+          <svg id="iconPlay" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="6 3 21 12 6 21 6 3" />
+          </svg>
+          <svg id="iconPause" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"
+               style="display:none">
+            <rect x="6" y="4" width="4" height="16" rx="1" />
+            <rect x="14" y="4" width="4" height="16" rx="1" />
+          </svg>
+          <span id="playPauseLabel">Play</span>
+        </button>
+
+        <button class="ghost" id="stopBtn" type="button" title="Kembali ke awal">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="5" y="4" width="4" height="16" rx="1" />
+            <polygon points="21 4 9 12 21 20 21 4" />
+          </svg>
+          Awal
+        </button>
+
+        <div class="seek-group">
+          <input type="range" id="seek" min="0" max="0" step="1" value="0" />
+          <span class="time-label" id="timeLabel">0.00s / 0.00s</span>
+        </div>
+
+        <select class="fps-select" id="fpsSelect" title="Batas laju deteksi">
+          <option value="0">Deteksi: semua frame</option>
+          <option value="10">Deteksi: 10 fps</option>
+          <option value="5">Deteksi: 5 fps</option>
+          <option value="2">Deteksi: 2 fps</option>
+        </select>
+      </div>
+
+      <div class="stats" id="stats">
+        <span class="pill" id="sFrame">frame 0</span>
+        <span class="pill" id="sObjects">0 objek</span>
+        <span class="pill" id="sInfer">— ms</span>
+        <span class="pill" id="sFps">— fps deteksi</span>
+      </div>
+
+      <div class="chips" id="vChips"></div>
+
+      <p class="note">
+        Deteksi berjalan <b>saat video diputar</b>. Semakin tinggi resolusi video,
+        semakin berat bebannya; turunkan laju deteksi kalau terasa lambat.
+      </p>
+
+      <div class="error" id="videoError"></div>
+    </section>
+
+    <!-- ============ PANEL KAMERA ============ -->
+    <section class="card" id="panelCamera" style="display:none">
+      <div class="model-bar">
+        <label for="cameraModel">Model YOLO</label>
+        <select id="cameraModel"></select>
+        <button class="ghost" id="cameraModelBtn" type="button">Pilih file .pt…</button>
+        <input type="file" id="cameraModelFile" accept=".pt" hidden />
+        <span class="model-info" id="cameraModelInfo">yolo26n.pt (bawaan)</span>
+      </div>
+
+      <div class="controls">
+        <div class="select-group">
+          <label for="cameraSelect">Sumber kamera</label>
+          <div class="select-row">
+            <select class="fps-select" id="cameraSelect" disabled>
+              <option value="">Belum ada kamera — klik muat ulang</option>
+            </select>
+            <button class="ghost icon-btn" id="cameraRefreshBtn" type="button"
+                    title="Muat ulang daftar kamera" aria-label="Muat ulang daftar kamera">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                   stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 10" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="slider-group">
+          <label for="cameraConf">
+            <span>Confidence threshold</span>
+            <b id="cameraConfValue">0.25</b>
+          </label>
+          <input type="range" id="cameraConf" min="0.05" max="0.95" step="0.05" value="0.25" />
+        </div>
+
+        <button id="cameraStartBtn" disabled>Mulai Deteksi</button>
+        <button class="ghost" id="cameraResetBtn" type="button">Reset</button>
+      </div>
+
+      <div class="cam-status-row" id="camStatusRow">
+        <span class="cam-status" id="camStatus">Mendeteksi kamera…</span>
+        <button class="ghost cam-perm-btn" id="cameraPermissionBtn" type="button"
+                style="display:none">
+          Minta izin akses kamera
+        </button>
+      </div>
+
+      <!-- Player kamera: <video> (browser) / <img> (server) sumbernya,
+           canvas yang ditampilkan -->
+      <div class="player" id="camPlayer">
+        <video id="camVideo" muted playsinline autoplay></video>
+        <img id="camServerImg" alt="" />
+        <canvas id="camCanvas"></canvas>
+        <div class="badge" id="camBadge">
+          <span class="dot"></span><span id="camBadgeText">Kamera belum aktif</span>
+        </div>
+      </div>
+
+      <div class="cam-placeholder" id="camPlaceholder">
+        Pilih kamera di atas, lalu klik <b>Mulai Deteksi</b>.<br />
+        Pilih <b>Kamera N · server</b> kalau browser tidak meminta izin kamera —
+        mode itu membuka kamera dari server, tanpa izin browser.
+      </div>
+
+      <div class="stats" id="camStats" style="display:none">
+        <span class="pill" id="cRes">— × —</span>
+        <span class="pill" id="cObjects">0 objek</span>
+        <span class="pill" id="cInfer">— ms</span>
+        <span class="pill" id="cFps">— fps deteksi</span>
+      </div>
+
+      <div class="chips" id="camChips"></div>
+
+      <p class="note">
+        Deteksi berjalan langsung dari kamera yang dipilih. Ganti kamera di
+        dropdown kapan saja — deteksi lanjut otomatis tanpa dihentikan.
+        <b>Browser</b> memakai izin browser, <b>Server</b> membuka kamera dari
+        server sehingga tidak butuh izin browser.
+      </p>
+
+      <div class="error" id="camError"></div>
+    </section>
+
+    <!-- ============ PANEL URL ============ -->
+    <section class="card" id="panelUrl" style="display:none">
+      <div class="model-bar">
+        <label for="urlModel">Model YOLO</label>
+        <select id="urlModel"></select>
+        <button class="ghost" id="urlModelBtn" type="button">Pilih file .pt…</button>
+        <input type="file" id="urlModelFile" accept=".pt" hidden />
+        <span class="model-info" id="urlModelInfo">yolo26n.pt (bawaan)</span>
+      </div>
+
+      <div class="controls">
+        <div class="url-group">
+          <label for="urlInput">Link sumber</label>
+          <input type="text" id="urlInput" class="url-input" autocomplete="off"
+                 spellcheck="false"
+                 placeholder="https://.../gambar.jpg · https://youtu.be/... · rtsp://user:pass@192.168.1.10:554/stream" />
+        </div>
+        <button id="urlDetectBtn">Deteksi</button>
+        <button class="ghost" id="urlStopBtn" type="button" disabled>Hentikan</button>
+        <button class="ghost" id="urlResetBtn" type="button">Reset</button>
+      </div>
+
+      <p class="note">
+        Bisa link <b>gambar</b>, <b>video YouTube</b> (langsung diputar &amp;
+        dideteksi realtime), atau <b>IP camera</b> (<code>rtsp://</code>,
+        <code>.m3u8</code>, stream HTTP).
+      </p>
+
+      <!-- Player URL: <img> MJPEG dari server, canvas yang tampil -->
+      <div class="player" id="urlPlayer">
+        <img id="urlStreamImg" alt="" />
+        <canvas id="urlCanvas"></canvas>
+        <div class="badge" id="urlBadge">
+          <span class="dot"></span><span id="urlBadgeText">Siap</span>
+        </div>
+      </div>
+
+      <div class="cam-placeholder" id="urlPlaceholder">
+        Tempel link di atas lalu klik <b>Deteksi</b>.<br />
+        Video YouTube / IP camera berjalan otomatis dan dideteksi realtime.
+      </div>
+
+      <div class="stats" id="urlStats" style="display:none">
+        <span class="pill truncate" id="uSource">—</span>
+        <span class="pill" id="uRes">— × —</span>
+        <span class="pill" id="uObjects">0 objek</span>
+        <span class="pill" id="uInfer">— ms</span>
+        <span class="pill" id="uFps">— fps deteksi</span>
+      </div>
+
+      <div class="chips" id="urlChips"></div>
+
+      <div class="error" id="urlError"></div>
+
+      <section id="urlResult">
+        <div class="result-head">
+          <h2>Hasil Deteksi Gambar</h2>
+          <span class="pill" id="uPillTotal"></span>
+          <span class="pill" id="uPillTime"></span>
+          <span class="pill" id="uPillConf"></span>
+        </div>
+
+        <div class="images">
+          <figure>
+            <img id="uImgOriginal" alt="Gambar asli" />
+            <figcaption>Asli</figcaption>
+          </figure>
+          <figure>
+            <img id="uImgAnnotated" alt="Gambar hasil deteksi" />
+            <figcaption>Hasil Deteksi</figcaption>
+          </figure>
+        </div>
+
+        <div class="chips" id="uChips"></div>
+
+        <table id="uTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Objek</th>
+              <th>Confidence</th>
+              <th class="bar-cell"></th>
+            </tr>
+          </thead>
+          <tbody id="uTbody"></tbody>
+        </table>
+      </section>
+    </section>
+
+
+  </div>
+
+  <script>
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("fileInput");
+    const preview = document.getElementById("preview");
+    const previewImg = document.getElementById("previewImg");
+    const detectBtn = document.getElementById("detectBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const confInput = document.getElementById("conf");
+    const confValue = document.getElementById("confValue");
+    const errorBox = document.getElementById("error");
+    const result = document.getElementById("result");
+
+    let selectedFile = null;
+
+    confInput.addEventListener("input", () => {
+      confValue.textContent = Number(confInput.value).toFixed(2);
+    });
+
+    // --- Pilih file ---
+    dropzone.addEventListener("click", () => fileInput.click());
+
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("drag");
+    });
+
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag"));
+
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("drag");
+      if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length) setFile(fileInput.files[0]);
+    });
+
+    function setFile(file) {
+      if (!file.type.startsWith("image/")) {
+        showError("File harus berupa gambar.");
+        return;
+      }
+      hideError();
+      selectedFile = file;
+      previewImg.src = URL.createObjectURL(file);
+      preview.style.display = "block";
+      detectBtn.disabled = false;
+      result.style.display = "none";
+    }
+
+    // --- Kirim ke server ---
+    detectBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+
+      const form = new FormData();
+      form.append("image", selectedFile);
+      form.append("conf", confInput.value);
+      form.append("model", modelChoice.image);
+
+      detectBtn.disabled = true;
+      detectBtn.innerHTML = '<span class="spinner"></span>Memproses...';
+      hideError();
+
+      try {
+        const res = await fetch("/api/detect", { method: "POST", body: form });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "Terjadi kesalahan.");
+
+        renderResult(data);
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        detectBtn.disabled = false;
+        detectBtn.textContent = "Deteksi Objek";
+      }
+    });
+
+    resetBtn.addEventListener("click", () => {
+      selectedFile = null;
+      fileInput.value = "";
+      preview.style.display = "none";
+      result.style.display = "none";
+      detectBtn.disabled = true;
+      hideError();
+    });
+
+    // Tiap tab punya bagian hasilnya sendiri, jadi hasil deteksi gambar tidak
+    // ikut muncul saat pindah ke tab Video/Kamera/URL (dan sebaliknya).
+    const RESULT_VIEWS = {
+      image: {
+        section: "result",
+        total: "pillTotal",
+        time: "pillTime",
+        conf: "pillConf",
+        original: "imgOriginal",
+        annotated: "imgAnnotated",
+        chips: "chips",
+        tbody: "tbody",
+      },
+      url: {
+        section: "urlResult",
+        total: "uPillTotal",
+        time: "uPillTime",
+        conf: "uPillConf",
+        original: "uImgOriginal",
+        annotated: "uImgAnnotated",
+        chips: "uChips",
+        tbody: "uTbody",
+      },
+    };
+
+    function renderResult(data, kind) {
+      const view = RESULT_VIEWS[kind] || RESULT_VIEWS.image;
+      const section = document.getElementById(view.section);
+
+      document.getElementById(view.original).src = data.original;
+      document.getElementById(view.annotated).src = data.annotated;
+
+      document.getElementById(view.total).textContent = `${data.total} objek`;
+      document.getElementById(view.time).textContent = `${data.inference_ms} ms`;
+      document.getElementById(view.conf).textContent = `conf ≥ ${data.conf.toFixed(2)}`;
+
+      // Chips ringkasan per kelas
+      const chips = document.getElementById(view.chips);
+      chips.innerHTML = "";
+      Object.entries(data.counts).forEach(([label, n]) => {
+        const el = document.createElement("span");
+        el.className = "chip";
+        el.innerHTML = `${label} <b>×${n}</b>`;
+        chips.appendChild(el);
+      });
+
+      // Tabel detail
+      const tbody = document.getElementById(view.tbody);
+      tbody.innerHTML = "";
+      if (data.detections.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="color:var(--muted)">
+          Tidak ada objek yang melewati threshold. Coba turunkan confidence.</td></tr>`;
+      } else {
+        data.detections.forEach((d, i) => {
+          const pct = Math.round(d.confidence * 100);
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${i + 1}</td>
+            <td>${d.label}</td>
+            <td>${pct}%</td>
+            <td class="bar-cell"><div class="bar" style="width:${pct}%"></div></td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      section.style.display = "block";
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.style.display = "block";
+    }
+
+    function hideError() {
+      errorBox.style.display = "none";
+    }
+
+    /* ==================================================================
+       TAB: Gambar / Video / Kamera / URL
+       ================================================================== */
+    const tabImage = document.getElementById("tabImage");
+    const tabVideo = document.getElementById("tabVideo");
+    const tabCamera = document.getElementById("tabCamera");
+    const tabUrl = document.getElementById("tabUrl");
+    const panelImage = document.getElementById("panelImage");
+    const panelVideo = document.getElementById("panelVideo");
+    const panelCamera = document.getElementById("panelCamera");
+    const panelUrl = document.getElementById("panelUrl");
+
+    function selectTab(mode) {
+      const isImage = mode === "image";
+      const isVideo = mode === "video";
+      const isCamera = mode === "camera";
+      const isUrl = mode === "url";
+
+      tabImage.classList.toggle("active", isImage);
+      tabVideo.classList.toggle("active", isVideo);
+      tabCamera.classList.toggle("active", isCamera);
+      tabUrl.classList.toggle("active", isUrl);
+      tabImage.setAttribute("aria-selected", isImage ? "true" : "false");
+      tabVideo.setAttribute("aria-selected", isVideo ? "true" : "false");
+      tabCamera.setAttribute("aria-selected", isCamera ? "true" : "false");
+      tabUrl.setAttribute("aria-selected", isUrl ? "true" : "false");
+
+      panelImage.style.display = isImage ? "block" : "none";
+      panelVideo.style.display = isVideo ? "block" : "none";
+      panelCamera.style.display = isCamera ? "block" : "none";
+      panelUrl.style.display = isUrl ? "block" : "none";
+
+      // Jeda video saat pindah tab supaya tidak ada deteksi "gaib"
+      if (!isVideo && typeof srcVideo !== "undefined" && !srcVideo.paused) {
+        srcVideo.pause();
+      }
+
+      // Kamera dilepas saat tab ditinggalkan (privasi + hemat CPU)
+      if (!isCamera) {
+        if (camStarting) cancelCameraStart();
+        if (camDetecting) stopCameraDetection("Kamera nonaktif");
+        else releaseCamera();
+      }
+
+      // Stream URL juga dilepas saat pindah tab
+      if (!isUrl) stopUrlStream();
+
+      // Segarkan daftar kamera tiap kali tab kamera dibuka. Tombol sengaja
+      // dibiarkan aktif selama pemuatan supaya klik tidak terasa "mati".
+      if (isCamera) {
+        cameraStartBtn.disabled = false;
+        refreshCameraList();
+      }
+    }
+
+    tabImage.addEventListener("click", () => selectTab("image"));
+    tabVideo.addEventListener("click", () => selectTab("video"));
+    tabCamera.addEventListener("click", () => selectTab("camera"));
+    tabUrl.addEventListener("click", () => selectTab("url"));
+
+    /* ==================================================================
+       MODEL YOLO — pilih model per tab.
+
+       Default: yolo26n.pt (sudah dimuat server saat start). User bisa
+       memilih file .pt dari PC-nya; file diupload, dimuat server, lalu
+       id-nya dikirim di setiap request deteksi tab tersebut.
+       ================================================================== */
+    const MODELS = [{ id: "default", name: "yolo26n.pt", size: 0 }];
+    const modelChoice = {
+      image: "default",
+      video: "default",
+      camera: "default",
+      url: "default",
+    };
+
+    const MODEL_TABS = {
+      image: { select: "imageModel", file: "imageModelFile", button: "imageModelBtn", info: "imageModelInfo" },
+      video: { select: "videoModel", file: "videoModelFile", button: "videoModelBtn", info: "videoModelInfo" },
+      camera: { select: "cameraModel", file: "cameraModelFile", button: "cameraModelBtn", info: "cameraModelInfo" },
+      url: { select: "urlModel", file: "urlModelFile", button: "urlModelBtn", info: "urlModelInfo" },
+    };
+
+    const MODEL_ERRORS = {
+      image: showError,
+      video: showVideoError,
+      camera: showCamError,
+      url: showUrlError,
+    };
+
+    function formatModelSize(size) {
+      if (!size) return "";
+      const mb = size / (1024 * 1024);
+      if (mb >= 1) return `${mb.toFixed(1)} MB`;
+      return `${Math.max(1, Math.round(size / 1024))} KB`;
+    }
+
+    function currentModel(tab) {
+      return MODELS.find((m) => m.id === modelChoice[tab]) || MODELS[0];
+    }
+
+    function updateModelInfo(tab) {
+      const ids = MODEL_TABS[tab];
+      const model = currentModel(tab);
+      const size = formatModelSize(model.size);
+      document.getElementById(ids.info).textContent =
+        model.id === "default"
+          ? `${model.name} (bawaan)`
+          : `${model.name}${size ? " · " + size : ""}`;
+    }
+
+    function refreshModelSelects() {
+      Object.entries(MODEL_TABS).forEach(([tab, ids]) => {
+        const select = document.getElementById(ids.select);
+        const chosen = modelChoice[tab] || "default";
+        select.innerHTML = "";
+        MODELS.forEach((m) => {
+          const label = m.id === "default"
+            ? `${m.name} (bawaan)`
+            : `${m.name}${m.size ? ` — ${formatModelSize(m.size)}` : ""}`;
+          select.add(new Option(label, m.id));
+        });
+        select.value = MODELS.some((m) => m.id === chosen) ? chosen : "default";
+        modelChoice[tab] = select.value;
+        updateModelInfo(tab);
+      });
+    }
+
+    async function uploadModel(tab, file) {
+      if (!file) return;
+
+      const ids = MODEL_TABS[tab];
+      const button = document.getElementById(ids.button);
+      const showTabError = MODEL_ERRORS[tab] || showError;
+
+      if (!/\.pt$/i.test(file.name)) {
+        showTabError("File model harus berekstensi .pt");
+        return;
+      }
+
+      const label = button.textContent;
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner"></span>Memuat…';
+
+      try {
+        const form = new FormData();
+        form.append("model", file);
+        const res = await fetch("/api/models/upload", { method: "POST", body: form });
+        const data = await parseJson(res);
+        if (!res.ok) throw new Error(data.error || "Model gagal dimuat.");
+
+        if (!MODELS.some((m) => m.id === data.id)) {
+          MODELS.push({ id: data.id, name: data.name, size: data.size });
+        }
+        modelChoice[tab] = data.id;
+        refreshModelSelects();
+      } catch (err) {
+        showTabError(err.message || "Model gagal dimuat.");
+      } finally {
+        button.disabled = false;
+        button.textContent = label;
+      }
+    }
+
+    Object.entries(MODEL_TABS).forEach(([tab, ids]) => {
+      const select = document.getElementById(ids.select);
+      const button = document.getElementById(ids.button);
+      const input = document.getElementById(ids.file);
+
+      select.addEventListener("change", () => {
+        modelChoice[tab] = select.value;
+        updateModelInfo(tab);
+      });
+
+      button.addEventListener("click", () => input.click());
+
+      input.addEventListener("change", () => {
+        const file = input.files && input.files[0];
+        input.value = ""; // supaya file yang sama bisa dipilih lagi
+        uploadModel(tab, file);
+      });
+    });
+
+    refreshModelSelects();
+
+    /* ==================================================================
+       VIDEO — deteksi realtime (streaming frame)
+       ================================================================== */
+    const videoDropzone = document.getElementById("videoDropzone");
+    const videoInput = document.getElementById("videoInput");
+    const detectVideoBtn = document.getElementById("detectVideoBtn");
+    const resetVideoBtn = document.getElementById("resetVideoBtn");
+    const videoConf = document.getElementById("videoConf");
+    const videoConfValue = document.getElementById("videoConfValue");
+    const videoError = document.getElementById("videoError");
+
+    // --- Player realtime ---
+    const player = document.getElementById("player");
+    const srcVideo = document.getElementById("srcVideo");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const playback = document.getElementById("playback");
+    const playPauseBtn = document.getElementById("playPauseBtn");
+    const playPauseLabel = document.getElementById("playPauseLabel");
+    const iconPlay = document.getElementById("iconPlay");
+    const iconPause = document.getElementById("iconPause");
+    const stopBtn = document.getElementById("stopBtn");
+    const seek = document.getElementById("seek");
+    const timeLabel = document.getElementById("timeLabel");
+    const fpsSelect = document.getElementById("fpsSelect");
+    const playerBadge = document.getElementById("playerBadge");
+    const badgeText = document.getElementById("badgeText");
+    const sFrame = document.getElementById("sFrame");
+    const sObjects = document.getElementById("sObjects");
+    const sInfer = document.getElementById("sInfer");
+    const sFps = document.getElementById("sFps");
+    const vChips = document.getElementById("vChips");
+
+    // Canvas bantu (tak ditampilkan) untuk menangkap frame yang dikirim ke server
+    const sendCanvas = document.createElement("canvas");
+    const sendCtx = sendCanvas.getContext("2d");
+
+    // Batas lebar frame yang dikirim ke server (hemat bandwidth + cepat)
+    const MAX_SEND_WIDTH = 960;
+
+    let selectedVideo = null;
+    let sessionId = null;
+    let detecting = false;      // sesi deteksi sedang berjalan
+    let busy = false;           // ada request inferensi yang belum selesai
+    let detectedFrames = 0;
+    let detectStart = 0;
+    let lastInferAt = 0;        // waktu kirim frame terakhir (ms)
+    let rafId = null;
+    let seekHeld = false;
+    let videoFps = 30;
+    let lastSourceTime = -1;
+
+    // Hasil deteksi terakhir + ukuran frame yang dikirim ke server.
+    // Box digambar ULANG di atas tiap frame video yang tampil, jadi box tetap
+    // kelihatan walaupun video sedang play (bukan cuma saat dipause).
+    let lastDetections = [];
+    let lastDetFrame = { w: 0, h: 0 };
+    let pendingPauseDetect = false;   // deteksi sekali untuk frame yang di-pause
+    let detectErrors = 0;             // request gagal berturut-turut
+    let retryNotBefore = 0;           // jeda sebelum mencoba kirim lagi (ms)
+
+    videoConf.addEventListener("input", () => {
+      videoConfValue.textContent = Number(videoConf.value).toFixed(2);
+    });
+
+    /* ---------------- Pilih file ---------------- */
+    videoDropzone.addEventListener("click", () => videoInput.click());
+
+    videoDropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      videoDropzone.classList.add("drag");
+    });
+
+    videoDropzone.addEventListener("dragleave", () => videoDropzone.classList.remove("drag"));
+
+    videoDropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      videoDropzone.classList.remove("drag");
+      if (e.dataTransfer.files.length) setVideo(e.dataTransfer.files[0]);
+    });
+
+    videoInput.addEventListener("change", () => {
+      if (videoInput.files.length) setVideo(videoInput.files[0]);
+    });
+
+    function setVideo(file) {
+      const okType = file.type.startsWith("video/") ||
+        /\.(mp4|avi|mov|mkv|webm|m4v)$/i.test(file.name);
+      if (!okType) {
+        showVideoError("File harus berupa video (MP4, AVI, MOV, MKV, WEBM, M4V).");
+        return;
+      }
+      hideVideoError();
+      teardownVideo();
+      selectedVideo = file;
+      detectVideoBtn.disabled = false;
+      detectVideoBtn.textContent = "Mulai Deteksi";
+      setBadge("Siap — klik Mulai Deteksi", true);
+    }
+
+    /* ---------------- Mulai / hentikan deteksi ---------------- */
+    detectVideoBtn.addEventListener("click", async () => {
+      if (detecting) {
+        stopDetection();
+        return;
+      }
+      if (!selectedVideo) return;
+
+      detectVideoBtn.disabled = true;
+      detectVideoBtn.innerHTML = '<span class="spinner"></span>Mengunggah...';
+      hideVideoError();
+
+      try {
+        const form = new FormData();
+        form.append("video", selectedVideo);
+
+        const res = await fetch("/api/video/upload", { method: "POST", body: form });
+        const data = await parseJson(res);
+        if (!res.ok) throw new Error(data.error || "Gagal mengunggah video.");
+
+        sessionId = data.session_id;
+        videoFps = data.fps || 30;
+
+        await loadVideo(data.src);
+
+        detecting = true;
+        detectedFrames = 0;
+        detectStart = performance.now();
+        detectErrors = 0;
+        retryNotBefore = 0;
+        detectVideoBtn.disabled = false;
+        detectVideoBtn.textContent = "Hentikan Deteksi";
+        setBadge("Deteksi berjalan", false);
+        playback.style.display = "flex";
+        player.style.display = "block";
+
+        // Langsung mainkan — deteksi ikut berjalan selama video diputar
+        await srcVideo.play().catch(() => {});
+        startLoop();
+      } catch (err) {
+        showVideoError(err.message);
+        detectVideoBtn.disabled = false;
+        detectVideoBtn.textContent = "Mulai Deteksi";
+      }
+    });
+
+    function loadVideo(src) {
+      return new Promise((resolve, reject) => {
+        srcVideo.src = src;
+        srcVideo.load();
+
+        srcVideo.addEventListener("loadedmetadata", function onMeta() {
+          srcVideo.removeEventListener("loadedmetadata", onMeta);
+
+          canvas.width = srcVideo.videoWidth;
+          canvas.height = srcVideo.videoHeight;
+          sendCanvas.width = Math.min(srcVideo.videoWidth, MAX_SEND_WIDTH);
+          sendCanvas.height = Math.round(
+            sendCanvas.width * (srcVideo.videoHeight / srcVideo.videoWidth)
+          );
+
+          // Video baru: buang hasil deteksi lama & paksa frame pertama digambar
+          lastDetections = [];
+          lastDetFrame = { w: 0, h: 0 };
+          lastSourceTime = -1;
+          pendingPauseDetect = false;
+          detectErrors = 0;
+          retryNotBefore = 0;
+
+          seek.max = Math.max(1, Math.round(srcVideo.duration * 1000));
+          seek.value = 0;
+          updateTimeLabel();
+
+          player.style.display = "block";
+          playback.style.display = "flex";
+          setBadge("Siap", true);
+          resolve();
+        });
+
+        srcVideo.addEventListener("error", () => {
+          reject(new Error(
+            "Browser gagal memutar video ini. Coba MP4 (H.264) atau WEBM."
+          ));
+        }, { once: true });
+      });
+    }
+
+    function teardownVideo() {
+      stopLoop();
+      stopDetection(true);
+      srcVideo.removeAttribute("src");
+      srcVideo.load();
+      player.style.display = "none";
+      playback.style.display = "none";
+      vChips.innerHTML = "";
+      lastDetections = [];
+      lastDetFrame = { w: 0, h: 0 };
+      lastSourceTime = -1;
+      pendingPauseDetect = false;
+      detectErrors = 0;
+      retryNotBefore = 0;
+      if (sessionId) {
+        // Hapus file di server (best effort)
+        fetch(`/api/video/${sessionId}`, { method: "DELETE" }).catch(() => {});
+        sessionId = null;
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      resetStats();
+    }
+
+    function stopDetection(keepUi) {
+      detecting = false;
+      busy = false;
+      pendingPauseDetect = false;
+      detectErrors = 0;
+      retryNotBefore = 0;
+      stopLoop();
+      if (!keepUi) {
+        setBadge("Deteksi dihentikan", true);
+        detectVideoBtn.textContent = "Mulai Deteksi";
+      }
+      srcVideo.pause();
+      syncPlayButton();
+    }
+
+    /* ---------------- Playback control ---------------- */
+    function syncPlayButton() {
+      const playing = !srcVideo.paused && !srcVideo.ended;
+      iconPlay.style.display = playing ? "none" : "block";
+      iconPause.style.display = playing ? "block" : "none";
+      playPauseLabel.textContent = playing ? "Pause" : "Play";
+    }
+
+    playPauseBtn.addEventListener("click", () => {
+      if (srcVideo.paused || srcVideo.ended) {
+        if (srcVideo.ended) srcVideo.currentTime = 0;
+        srcVideo.play().catch(() => {});
+      } else {
+        srcVideo.pause();
+      }
+    });
+
+    stopBtn.addEventListener("click", () => {
+      srcVideo.pause();
+      srcVideo.currentTime = 0;
+      seek.value = 0;
+      updateTimeLabel();
+      lastSourceTime = -1;
+      if (detecting) {
+        detectedFrames = 0;
+        detectStart = performance.now();
+        resetStats();
+      }
+    });
+
+    srcVideo.addEventListener("play", () => {
+      syncPlayButton();
+      pendingPauseDetect = false;
+      if (detecting) setBadge("Deteksi berjalan", false);
+      startLoop();
+    });
+
+    srcVideo.addEventListener("pause", () => {
+      syncPlayButton();
+      if (detecting) {
+        setBadge("Dijeda", true);
+        // Deteksi sekali untuk frame tempat video berhenti -> box pas.
+        pendingPauseDetect = true;
+      }
+    });
+
+    srcVideo.addEventListener("ended", () => {
+      syncPlayButton();
+      pendingPauseDetect = false;
+      if (detecting) {
+        setBadge("Selesai", true);
+        detecting = false;
+        detectVideoBtn.textContent = "Mulai Deteksi";
+      }
+    });
+
+    srcVideo.addEventListener("seeked", () => {
+      // Lompat posisi: frame berganti total, box lama tidak relevan lagi.
+      lastSourceTime = -1;
+      lastDetections = [];
+      paintFrame();
+      // Kalau video sedang berhenti, deteksi sekali untuk frame baru ini.
+      if (detecting && (srcVideo.paused || srcVideo.ended)) {
+        pendingPauseDetect = true;
+      }
+    });
+
+    // Geser timeline (seek)
+    seek.addEventListener("input", () => {
+      seekHeld = true;
+      const t = Number(seek.value) / 1000;
+      srcVideo.currentTime = t;
+      updateTimeLabel();
+    });
+
+    seek.addEventListener("change", () => {
+      seekHeld = false;
+    });
+
+    srcVideo.addEventListener("timeupdate", () => {
+      if (!seekHeld) {
+        seek.value = Math.round(srcVideo.currentTime * 1000);
+      }
+      updateTimeLabel();
+    });
+
+    function updateTimeLabel() {
+      const cur = srcVideo.currentTime || 0;
+      const dur = srcVideo.duration || 0;
+      timeLabel.textContent = `${cur.toFixed(2)}s / ${dur.toFixed(2)}s`;
+    }
+
+    // Spasi = play/pause, hanya saat tab video aktif
+    document.addEventListener("keydown", (e) => {
+      if (panelVideo.style.display === "none") return;
+      if (e.code !== "Space") return;
+      const tag = (e.target.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "select" || tag === "button" || tag === "textarea") return;
+      e.preventDefault();
+      playPauseBtn.click();
+    });
+
+    /* ---------------- Loop render + deteksi ---------------- */
+    function startLoop() {
+      if (rafId !== null) return;
+      const tick = () => {
+        rafId = requestAnimationFrame(tick);
+        drawSource();
+        maybeDetect();
+      };
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function stopLoop() {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+    }
+
+    /**
+     * Gambar frame video yang sedang tampil + bounding box hasil deteksi
+     * terakhir ke canvas. Dipanggil tiap frame saat video play.
+     */
+    function paintFrame() {
+      if (!srcVideo.videoWidth || !canvas.width) return;
+      ctx.drawImage(srcVideo, 0, 0, canvas.width, canvas.height);
+      drawDetections();
+      updateFramePill();
+    }
+
+    /** Jalur cepat: hanya gambar ulang kalau frame video benar-benar berubah. */
+    function drawSource() {
+      if (!srcVideo.videoWidth || !canvas.width) return;
+      if (srcVideo.currentTime === lastSourceTime) return;
+      lastSourceTime = srcVideo.currentTime;
+      paintFrame();
+    }
+
+    // Warna box per kelas (stabil untuk label yang sama)
+    const BOX_COLORS = [
+      "#4f8cff", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4",
+      "#ec4899", "#84cc16", "#fb923c", "#14b8a6", "#eab308", "#6366f1",
+    ];
+    const labelColors = new Map();
+
+    function colorFor(label) {
+      if (!labelColors.has(label)) {
+        labelColors.set(label, BOX_COLORS[labelColors.size % BOX_COLORS.length]);
+      }
+      return labelColors.get(label);
+    }
+
+    /**
+     * Gambar box dari hasil deteksi di atas canvas apa pun (video / kamera).
+     * Koordinat box dari server memakai ukuran frame yang dikirim (sendCanvas),
+     * jadi diskalakan dulu ke ukuran canvas tampilan.
+     */
+    function drawBoxes(g, detections, detFrame, width, height) {
+      if (!detections || !detections.length || !width || !height) return;
+
+      const fw = detFrame.w || width;
+      const fh = detFrame.h || height;
+      const sx = width / fw;
+      const sy = height / fh;
+
+      const lineWidth = Math.max(2, Math.round(width / 400));
+      const fontSize = Math.max(11, Math.round(width / 55));
+      g.lineWidth = lineWidth;
+      g.font = `600 ${fontSize}px "Segoe UI", system-ui, sans-serif`;
+      g.textBaseline = "alphabetic";
+
+      detections.forEach((d) => {
+        const [x1, y1, x2, y2] = d.box;
+        const x = x1 * sx;
+        const y = y1 * sy;
+        const w = Math.max(1, (x2 - x1) * sx);
+        const h = Math.max(1, (y2 - y1) * sy);
+        const color = colorFor(d.label);
+
+        g.strokeStyle = color;
+        g.strokeRect(x, y, w, h);
+
+        const text = `${d.label} ${Math.round(d.confidence * 100)}%`;
+        const padX = fontSize * 0.45;
+        const padY = fontSize * 0.35;
+        const boxW = g.measureText(text).width + padX * 2;
+        const boxH = fontSize + padY * 2;
+        // Label di atas box; kalau tidak muat (box mepet atas), taruh di dalam
+        const labelY = y - boxH >= 0 ? y - boxH : y;
+
+        g.fillStyle = color;
+        g.fillRect(x, labelY, boxW, boxH);
+        g.fillStyle = "#0b1220";
+        g.fillText(text, x + padX, labelY + padY + fontSize * 0.82);
+      });
+    }
+
+    function drawDetections() {
+      drawBoxes(ctx, lastDetections, lastDetFrame, canvas.width, canvas.height);
+    }
+
+    function updateFramePill() {
+      const total = videoFps > 0 ? Math.round((srcVideo.duration || 0) * videoFps) : 0;
+      const cur = Math.round((srcVideo.currentTime || 0) * videoFps);
+      sFrame.textContent = total ? `frame ${cur} / ${total}` : `frame ${cur}`;
+    }
+
+    /** Kirim frame ke server untuk dideteksi, sesuai laju yang dipilih. */
+    function maybeDetect() {
+      if (!detecting || busy) return;
+      if (panelVideo.style.display === "none") return;
+      if (performance.now() < retryNotBefore) return;
+
+      const paused = srcVideo.paused || srcVideo.ended;
+
+      // Saat video berhenti (pause / seek), deteksi sekali saja supaya box
+      // pas dengan frame yang sedang ditampilkan.
+      if (paused && !pendingPauseDetect) return;
+
+      if (paused) {
+        pendingPauseDetect = false;
+      } else {
+        const limit = Number(fpsSelect.value); // 0 = tanpa batas
+        if (limit > 0 && performance.now() - lastInferAt < 1000 / limit) return;
+      }
+
+      busy = true;
+      lastInferAt = performance.now();
+      sendFrame();
+    }
+
+    async function sendFrame() {
+      try {
+        sendCtx.drawImage(srcVideo, 0, 0, sendCanvas.width, sendCanvas.height);
+        const image = sendCanvas.toDataURL("image/jpeg", 0.7);
+
+        const frameIndex = Math.round((srcVideo.currentTime || 0) * videoFps);
+
+        const res = await fetch("/api/video/detect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image,
+            frame: frameIndex,
+            conf: Number(videoConf.value),
+            model: modelChoice.video,
+            session_id: sessionId,
+            // Box digambar di browser di atas frame yang sedang berjalan, jadi
+            // frame beranotasi dari server tidak diperlukan (hemat bandwidth).
+            return_image: false,
+          }),
+        });
+
+        const data = await parseJson(res);
+        if (!res.ok) throw new Error(data.error || "Gagal mendeteksi frame.");
+        if (!detecting) return; // sesi sudah dihentikan saat request berjalan
+
+        // Berhasil lagi -> pesan error lama (mis. server sempat restart) hilang
+        // sendiri dan hitungan gagal di-reset.
+        hideVideoError();
+        retryNotBefore = 0;
+        detectErrors = 0;
+
+        // Simpan hasil, lalu langsung gambar ulang frame + box. Tanpa langkah
+        // ini, frame video berikutnya akan menimpa box (inilah bug lamanya).
+        lastDetections = Array.isArray(data.detections) ? data.detections : [];
+        lastDetFrame = {
+          w: Number(data.frame_width) || sendCanvas.width,
+          h: Number(data.frame_height) || sendCanvas.height,
+        };
+        paintFrame();
+
+        detectedFrames += 1;
+        updateStats(data);
+      } catch (err) {
+        detectErrors += 1;
+
+        // Server dev restart otomatis (~3-5 detik) tiap kali kode diubah, dan
+        // itu memutus request yang sedang jalan. Beri jeda yang makin panjang
+        // lalu coba lagi, jangan langsung mematikan sesi.
+        retryNotBefore = performance.now() + Math.min(400 * detectErrors, 3000);
+        if (srcVideo.paused) pendingPauseDetect = true;
+
+        if (isTransientError(err)) {
+          showVideoError("Koneksi ke server terputus — mencoba lagi…");
+          if (detectErrors >= 15) stopDetection();
+        } else {
+          showVideoError(err.message);
+          if (detectErrors >= 5) stopDetection();
+        }
+      } finally {
+        busy = false;
+      }
+    }
+
+    /**
+     * Error jaringan (server mati / sedang restart), bukan error logika
+     * aplikasi. Pesannya beda-beda per browser:
+     * Chrome "Failed to fetch", Firefox "NetworkError...", Safari "Load failed".
+     */
+    function isTransientError(err) {
+      const msg = String((err && err.message) || err || "");
+      return err instanceof TypeError ||
+        /failed to fetch|networkerror|load failed|network request failed/i.test(msg);
+    }
+
+    function updateStats(data) {
+      sObjects.textContent = `${data.total_objects} objek`;
+      sInfer.textContent = `${data.inference_ms} ms`;
+
+      const secs = (performance.now() - detectStart) / 1000;
+      const rate = secs > 0 ? detectedFrames / secs : 0;
+      sFps.textContent = `${rate.toFixed(1)} fps deteksi`;
+
+      vChips.innerHTML = "";
+      const entries = Object.entries(data.counts || {});
+      if (entries.length === 0) {
+        vChips.innerHTML = '<span class="chip">Tidak ada objek</span>';
+      } else {
+        entries.forEach(([label, n]) => {
+          const el = document.createElement("span");
+          el.className = "chip";
+          el.innerHTML = `${label} <b>×${n}</b>`;
+          vChips.appendChild(el);
+        });
+      }
+    }
+
+    function resetStats() {
+      sObjects.textContent = "0 objek";
+      sInfer.textContent = "— ms";
+      sFps.textContent = "— fps deteksi";
+      sFrame.textContent = "frame 0";
+    }
+
+    function setBadge(text, paused) {
+      badgeText.textContent = text;
+      playerBadge.classList.toggle("paused", !!paused);
+    }
+
+    resetVideoBtn.addEventListener("click", () => {
+      teardownVideo();
+      selectedVideo = null;
+      videoInput.value = "";
+      detectVideoBtn.disabled = true;
+      detectVideoBtn.textContent = "Mulai Deteksi";
+      setBadge("Siap", true);
+      hideVideoError();
+    });
+
+    /* ==================================================================
+       KAMERA — dua sumber frame:
+
+       1) "browser" : getUserMedia + enumerateDevices (butuh izin browser).
+       2) "server"  : OpenCV di server, frame ditarik sebagai MJPEG
+                      (TIDAK butuh izin browser sama sekali).
+
+       Frame dari sumber mana pun dikirim ke /api/camera/detect untuk
+       dideteksi, lalu bounding box digambar di browser.
+       ================================================================== */
+    const cameraSelect = document.getElementById("cameraSelect");
+    const cameraRefreshBtn = document.getElementById("cameraRefreshBtn");
+    const cameraStartBtn = document.getElementById("cameraStartBtn");
+    const cameraResetBtn = document.getElementById("cameraResetBtn");
+    const cameraConf = document.getElementById("cameraConf");
+    const cameraConfValue = document.getElementById("cameraConfValue");
+    const camStatus = document.getElementById("camStatus");
+    const camStatusRow = document.getElementById("camStatusRow");
+    const cameraPermissionBtn = document.getElementById("cameraPermissionBtn");
+    const camError = document.getElementById("camError");
+    const camPlayer = document.getElementById("camPlayer");
+    const camVideo = document.getElementById("camVideo");
+    const camServerImg = document.getElementById("camServerImg");
+    const camCanvas = document.getElementById("camCanvas");
+    const camCtx = camCanvas.getContext("2d");
+    const camBadge = document.getElementById("camBadge");
+    const camBadgeText = document.getElementById("camBadgeText");
+    const camPlaceholder = document.getElementById("camPlaceholder");
+    const cRes = document.getElementById("cRes");
+    const cObjects = document.getElementById("cObjects");
+    const cInfer = document.getElementById("cInfer");
+    const cFps = document.getElementById("cFps");
+    const camChips = document.getElementById("camChips");
+    const camStats = document.getElementById("camStats");
+
+    // Canvas bantu (tak ditampilkan) untuk frame yang dikirim ke server
+    const camSendCanvas = document.createElement("canvas");
+    const camSendCtx = camSendCanvas.getContext("2d");
+    const CAM_MAX_SEND_WIDTH = 960;
+    const CAM_PERMISSION_TIMEOUT_MS = 20000;
+
+    let camMode = "browser";     // "browser" | "server"
+    let camStream = null;
+    let camServerId = null;      // sesi kamera server yang sedang aktif
+    let camServerIndex = null;
+    let camServerCameras = [];
+    let browserCameras = [];
+    let browserPermission = "unknown";
+    let camRefreshing = false;
+    let camStartToken = 0;       // penanda start; naik = start dibatalkan
+    let camPermToken = 0;        // penanda permintaan izin kamera
+    let camPermPending = false;  // sedang menunggu jawaban izin browser
+    let camDetecting = false;    // sesi deteksi kamera berjalan
+    let camStarting = false;     // sedang menyiapkan kamera (cegah klik ganda)
+    let camSwitching = false;    // sedang ganti kamera
+    let camBusy = false;         // ada request inferensi yang belum selesai
+    let camRafId = null;
+    let camDetections = [];
+    let camDetFrame = { w: 0, h: 0 };
+    let camDetectedFrames = 0;
+    let camDetectStart = 0;
+    let camDetectErrors = 0;
+    let camRetryNotBefore = 0;
+    let camReleasing = false;    // kita sendiri yang melepas stream
+
+    /** Batasi waktu sebuah promise supaya UI tidak menggantung. */
+    function withTimeout(promise, ms, fallback) {
+      return Promise.race([
+        promise.catch(() => fallback),
+        new Promise((resolve) => setTimeout(() => resolve(fallback), ms)),
+      ]);
+    }
+
+    cameraConf.addEventListener("input", () => {
+      cameraConfValue.textContent = Number(cameraConf.value).toFixed(2);
+    });
+
+    function mediaSupported() {
+      return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    }
+
+    /** Terjemahkan error kamera jadi pesan yang bisa ditindaklanjuti. */
+    function cameraErrorMessage(err) {
+      const name = (err && err.name) || "";
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        return "Izin kamera ditolak browser. Klik ikon kamera di address bar lalu Allow, " +
+          "atau pilih kamera server di dropdown (tanpa izin browser).";
+      }
+      if (name === "PermissionTimeoutError") {
+        return "Browser tidak menampilkan permintaan izin kamera. Coba pilih " +
+          "\"Kamera N · server\" di dropdown — mode itu tidak butuh izin browser.";
+      }
+      if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        return "Tidak ada kamera yang bisa dipakai browser. Pilih kamera server di dropdown.";
+      }
+      if (name === "NotReadableError" || name === "TrackStartError") {
+        return "Kamera sedang dipakai aplikasi lain (Zoom / Meet / OBS). Tutup aplikasi " +
+          "itu, atau pilih kamera server dengan index lain.";
+      }
+      if (name === "OverconstrainedError") {
+        return "Kamera yang dipilih tidak tersedia lagi. Klik muat ulang lalu pilih kamera lain.";
+      }
+      return (err && err.message) || "Gagal mengakses kamera.";
+    }
+
+    async function queryCameraPermission() {
+      if (!mediaSupported()) return "unsupported";
+      try {
+        if (!navigator.permissions || !navigator.permissions.query) return "unknown";
+        const status = await navigator.permissions.query({ name: "camera" });
+        return status.state || "unknown";
+      } catch (err) {
+        return "unknown";
+      }
+    }
+
+    /** Daftar kamera browser (nama baru terbaca setelah izin diberikan). */
+    async function listCameras() {
+      if (!mediaSupported()) return [];
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        return devices.filter((d) => d.kind === "videoinput");
+      } catch (err) {
+        return [];
+      }
+    }
+
+    /** Daftar kamera yang bisa dibuka server (OpenCV). */
+    async function listServerCameras(force) {
+      try {
+        const res = await fetch(`/api/camera/list${force ? "?refresh=1" : ""}`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return Array.isArray(data.cameras) ? data.cameras : [];
+      } catch (err) {
+        return [];
+      }
+    }
+
+    /** Isi dropdown: kamera browser + kamera server, dikelompokkan. */
+    function buildCameraOptions(previous) {
+      cameraSelect.innerHTML = "";
+
+      const browserGroup = document.createElement("optgroup");
+      browserGroup.label = "Browser (butuh izin)";
+      const usable = browserCameras.filter((d) => d.deviceId);
+      if (usable.length === 0) {
+        browserGroup.appendChild(
+          new Option(
+            browserCameras.length
+              ? "Kamera default browser (izinkan saat mulai)"
+              : "Tidak ada kamera browser",
+            browserCameras.length ? "browser:" : ""
+          )
+        );
+      } else {
+        usable.forEach((device, i) => {
+          browserGroup.appendChild(
+            new Option(device.label || `Kamera browser ${i + 1}`, `browser:${device.deviceId}`)
+          );
+        });
+      }
+      cameraSelect.appendChild(browserGroup);
+
+      if (camServerCameras.length) {
+        const serverGroup = document.createElement("optgroup");
+        serverGroup.label = "Server (tanpa izin browser)";
+        camServerCameras.forEach((cam) => {
+          let suffix = "";
+          if (cam.busy) suffix = " · sedang dipakai";
+          else if (cam.width && cam.height) suffix = ` · ${cam.width}×${cam.height}`;
+          serverGroup.appendChild(
+            new Option(`Kamera ${cam.index}${suffix}`, `server:${cam.index}`)
+          );
+        });
+        cameraSelect.appendChild(serverGroup);
+      }
+
+      const values = [...cameraSelect.options].map((o) => o.value).filter(Boolean);
+      const hasAny = values.length > 0;
+      cameraSelect.disabled = !hasAny;
+      cameraStartBtn.disabled = !hasAny;
+      if (!hasAny) return;
+
+      if (previous && values.includes(previous)) {
+        cameraSelect.value = previous;
+        return;
+      }
+
+      // Default: kamera server kalau ada (tidak butuh izin browser dan tidak
+      // terganggu virtual camera seperti EOS/OBS). Kamera browser tetap bisa
+      // dipilih manual.
+      const firstServer = values.find((v) => v.startsWith("server:"));
+      const firstBrowser = values.find((v) => v.startsWith("browser:"));
+      cameraSelect.value = firstServer || firstBrowser || values[0];
+    }
+
+    /**
+     * Status izin kamera browser.
+     *
+     * Hanya ditampilkan kalau memang perlu tindakan, dan hanya saat sumber
+     * yang dipilih adalah kamera browser. Kalau memakai kamera server (yang
+     * tidak butuh izin browser), baris ini disembunyikan supaya tidak
+     * membingungkan.
+     */
+    function updateCamStatus() {
+      const choice = cameraSelect.value || "";
+      const browserChoice = choice.startsWith("browser:");
+
+      if (!browserChoice) {
+        camStatusRow.style.display = "none";
+        cameraPermissionBtn.style.display = "none";
+        return;
+      }
+
+      if (!mediaSupported()) {
+        camStatusRow.style.display = "flex";
+        camStatus.innerHTML =
+          "Browser ini tidak bisa mengakses kamera — pakai <b>kamera server</b>.";
+        cameraPermissionBtn.style.display = "none";
+        return;
+      }
+
+      if (browserPermission === "granted") {
+        // Sudah boleh dipakai: tidak perlu tulisan apa pun
+        camStatusRow.style.display = "none";
+        cameraPermissionBtn.style.display = "none";
+        return;
+      }
+
+      camStatusRow.style.display = "flex";
+      cameraPermissionBtn.style.display = "none";
+
+      if (browserPermission === "denied") {
+        camStatus.innerHTML =
+          "Izin kamera browser <b>diblokir</b>. Klik ikon kamera di address bar " +
+          "lalu pilih Allow, atau pakai <b>kamera server</b>.";
+        return;
+      }
+
+      // "prompt" / "unknown": izin belum pernah diminta -> sediakan tombol
+      camStatus.innerHTML = "Izin kamera browser <b>belum diminta</b>.";
+      cameraPermissionBtn.style.display = "inline-flex";
+    }
+
+    /** Minta izin kamera ke browser (memicu prompt izin). */
+    async function requestBrowserPermission() {
+      if (!mediaSupported()) {
+        showCamError("Browser ini tidak bisa mengakses kamera. Pakai kamera server.");
+        return;
+      }
+
+      // Klik saat menunggu = batalkan (mis. prompt tidak muncul)
+      if (camPermPending) {
+        camPermToken += 1;
+        camPermPending = false;
+        cameraPermissionBtn.textContent = "Minta izin akses kamera";
+        hideCamError();
+        return;
+      }
+
+      const token = ++camPermToken;
+      camPermPending = true;
+      cameraPermissionBtn.textContent = "Batalkan";
+      hideCamError();
+
+      try {
+        const stream = await getUserMediaWithTimeout(
+          { audio: false, video: true },
+          20000
+        );
+        // Izin sudah didapat (atau dibatalkan): lepas stream-nya lagi
+        stream.getTracks().forEach((track) => track.stop());
+        if (token !== camPermToken) return;
+
+        browserPermission = await queryCameraPermission();
+        await refreshCameraList();
+
+        // Arahkan pilihan ke kamera browser pertama (kalau sedang tidak live)
+        if (!camDetecting) {
+          const firstBrowser = [...cameraSelect.options]
+            .map((option) => option.value)
+            .find((value) => value.startsWith("browser:"));
+          if (firstBrowser) cameraSelect.value = firstBrowser;
+        }
+        updateCamStatus();
+      } catch (err) {
+        if (token !== camPermToken) return;
+        browserPermission = await queryCameraPermission();
+        updateCamStatus();
+        showCamError(cameraErrorMessage(err));
+      } finally {
+        if (token === camPermToken) {
+          camPermPending = false;
+          cameraPermissionBtn.textContent = "Minta izin akses kamera";
+        }
+      }
+    }
+
+    cameraPermissionBtn.addEventListener("click", requestBrowserPermission);
+
+    /** Segarkan daftar kamera browser + server. */
+    async function refreshCameraList(preferredValue) {
+      if (camRefreshing) return;
+      camRefreshing = true;
+      // Tombol tetap bisa diklik selama mendeteksi; klik-nya diberi pesan
+      // "tunggu sebentar" (lihat handler Mulai Deteksi) supaya tidak terasa
+      // seperti tombol mati.
+      camStatusRow.style.display = "flex";
+      camStatus.textContent = "Mendeteksi kamera…";
+      cameraPermissionBtn.style.display = "none";
+      try {
+        const previous = preferredValue || cameraSelect.value || "";
+        const [browsers, permission, servers] = await Promise.all([
+          withTimeout(listCameras(), 8000, []),
+          withTimeout(queryCameraPermission(), 8000, "unknown"),
+          withTimeout(listServerCameras(), 8000, []),
+        ]);
+        browserCameras = browsers;
+        browserPermission = permission;
+        camServerCameras = servers;
+        buildCameraOptions(previous);
+        updateCamStatus();
+      } finally {
+        camRefreshing = false;
+      }
+    }
+
+    /* ---------------- Sumber frame: browser / server ---------------- */
+    function camSource() {
+      return camMode === "server" ? camServerImg : camVideo;
+    }
+
+    function camSourceSize() {
+      if (camMode === "server") {
+        return {
+          w: camServerImg.naturalWidth || 0,
+          h: camServerImg.naturalHeight || 0,
+        };
+      }
+      return { w: camVideo.videoWidth || 0, h: camVideo.videoHeight || 0 };
+    }
+
+    /** getUserMedia dengan batas waktu (prompt izin bisa menggantung). */
+    function getUserMediaWithTimeout(constraints, ms) {
+      if (!mediaSupported()) {
+        const err = new Error("Browser tidak mendukung akses kamera.");
+        err.name = "NotSupportedError";
+        return Promise.reject(err);
+      }
+
+      let timedOut = false;
+      const request = navigator.mediaDevices.getUserMedia(constraints);
+      request
+        .then((stream) => {
+          // Jawaban datang setelah timeout -> langsung lepas lagi
+          if (timedOut) stream.getTracks().forEach((track) => track.stop());
+        })
+        .catch(() => {});
+
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          timedOut = true;
+          const err = new Error(
+            "Browser tidak menampilkan / menjawab permintaan izin kamera."
+          );
+          err.name = "PermissionTimeoutError";
+          reject(err);
+        }, ms || CAM_PERMISSION_TIMEOUT_MS);
+
+        request.then(
+          (stream) => {
+            clearTimeout(timer);
+            if (!timedOut) resolve(stream);
+          },
+          (err) => {
+            clearTimeout(timer);
+            if (!timedOut) reject(err);
+          }
+        );
+      });
+    }
+
+    /** Tunggu <video> kamera browser mengirim frame (videoWidth > 0). */
+    function waitForCameraFrame() {
+      return new Promise((resolve, reject) => {
+        let settled = false;
+        let timer = null;
+
+        const cleanup = () => {
+          camVideo.removeEventListener("loadedmetadata", check);
+          camVideo.removeEventListener("resize", check);
+          camVideo.removeEventListener("playing", check);
+          if (timer) clearTimeout(timer);
+        };
+        const done = (err) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          err ? reject(err) : resolve();
+        };
+        const check = () => { if (camVideo.videoWidth > 0) done(); };
+
+        camVideo.addEventListener("loadedmetadata", check);
+        camVideo.addEventListener("resize", check);
+        camVideo.addEventListener("playing", check);
+        timer = setTimeout(() => {
+          if (camVideo.videoWidth > 0) done();
+          else done(new Error("Kamera tidak mengirim gambar. Coba kamera lain."));
+        }, 8000);
+
+        camVideo.play().catch(() => {});
+        check();
+      });
+    }
+
+    /** Tunggu <img> MJPEG kamera server menerima frame pertama. */
+    function waitForImageFrame(img) {
+      return new Promise((resolve, reject) => {
+        if (img.complete && img.naturalWidth > 0) {
+          resolve();
+          return;
+        }
+
+        let settled = false;
+        const timer = setTimeout(() => finish(new Error("Kamera server tidak mengirim gambar.")), 8000);
+
+        function finish(err) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          img.removeEventListener("load", onLoad);
+          img.removeEventListener("error", onError);
+          err ? reject(err) : resolve();
+        }
+        function onLoad() {
+          if (img.naturalWidth > 0) finish();
+        }
+        function onError() {
+          finish(new Error("Stream kamera server gagal dimuat."));
+        }
+
+        img.addEventListener("load", onLoad);
+        img.addEventListener("error", onError);
+      });
+    }
+
+    function stopCameraTracks() {
+      camReleasing = true;
+      if (camStream) {
+        camStream.getTracks().forEach((track) => track.stop());
+        camStream = null;
+      }
+      camVideo.srcObject = null;
+      // Biarkan event "ended" dari track lama terlewat dulu
+      setTimeout(() => { camReleasing = false; }, 0);
+    }
+
+    async function closeServerCamera() {
+      const id = camServerId;
+      camServerId = null;
+      camServerIndex = null;
+      camServerImg.removeAttribute("src");
+      if (!id) return;
+      try {
+        await fetch(`/api/camera/${id}`, { method: "DELETE" });
+      } catch (err) {
+        // Server mati / sudah restart: tidak ada yang perlu dilepas
+      }
+    }
+
+    function releaseCamera() {
+      stopCameraTracks();
+      closeServerCamera();
+    }
+
+    /** Buka kamera lewat browser (getUserMedia). false = dibatalkan. */
+    async function openBrowserCamera(deviceId, token) {
+      if (!mediaSupported()) {
+        const err = new Error("Browser tidak mendukung akses kamera.");
+        err.name = "NotSupportedError";
+        throw err;
+      }
+
+      await closeServerCamera();
+      stopCameraTracks();
+
+      const withHd = deviceId
+        ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        : { width: { ideal: 1280 }, height: { ideal: 720 } };
+      const plain = deviceId ? { deviceId: { exact: deviceId } } : true;
+
+      let stream;
+      try {
+        stream = await getUserMediaWithTimeout({ audio: false, video: withHd });
+      } catch (err) {
+        // Sebagian driver menolak resolusi ideal -> minta apa adanya
+        if (err && err.name === "OverconstrainedError") {
+          stream = await getUserMediaWithTimeout({ audio: false, video: plain });
+        } else {
+          throw err;
+        }
+      }
+
+      // Start dibatalkan saat menunggu izin: jangan pegang kamera ini
+      if (token !== undefined && token !== camStartToken) {
+        stream.getTracks().forEach((track) => track.stop());
+        return false;
+      }
+
+      camMode = "browser";
+      camStream = stream;
+      camVideo.srcObject = stream;
+
+      stream.getVideoTracks().forEach((track) => {
+        track.addEventListener("ended", () => {
+          if (camReleasing || !camDetecting) return;
+          stopCameraDetection("Kamera terputus");
+          showCamError("Kamera terputus. Pilih kamera lain lalu mulai lagi.");
+        });
+      });
+
+      await waitForCameraFrame();
+
+      // Bisa juga dibatalkan saat menunggu frame pertama
+      if (token !== undefined && token !== camStartToken) {
+        stopCameraTracks();
+        return false;
+      }
+
+      camCanvas.width = camVideo.videoWidth;
+      camCanvas.height = camVideo.videoHeight;
+      camSendCanvas.width = Math.min(camVideo.videoWidth, CAM_MAX_SEND_WIDTH);
+      camSendCanvas.height = Math.max(
+        1,
+        Math.round(camSendCanvas.width * (camVideo.videoHeight / camVideo.videoWidth))
+      );
+
+      finishCameraOpen(camVideo.videoWidth, camVideo.videoHeight);
+      return true;
+    }
+
+    /** Buka kamera lewat server (OpenCV), tanpa izin browser. */
+    async function openServerCamera(index, token) {
+      stopCameraTracks();
+      await closeServerCamera();
+
+      const res = await fetch("/api/camera/open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ index }),
+      });
+      const data = await parseJson(res);
+      if (!res.ok) throw new Error(data.error || "Gagal membuka kamera server.");
+
+      // Start dibatalkan saat kamera sedang dibuka -> lepas sesi ini saja
+      if (token !== undefined && token !== camStartToken) {
+        fetch(`/api/camera/${data.session_id}`, { method: "DELETE" }).catch(() => {});
+        return false;
+      }
+
+      camMode = "server";
+      camServerId = data.session_id;
+      camServerIndex = data.index;
+      camServerImg.src = `${data.stream}?t=${Date.now()}`;
+
+      await waitForImageFrame(camServerImg);
+
+      if (token !== undefined && token !== camStartToken) {
+        closeServerCamera();
+        return false;
+      }
+
+      camCanvas.width = camServerImg.naturalWidth;
+      camCanvas.height = camServerImg.naturalHeight;
+      camSendCanvas.width = Math.min(camServerImg.naturalWidth, CAM_MAX_SEND_WIDTH);
+      camSendCanvas.height = Math.max(
+        1,
+        Math.round(camSendCanvas.width * (camServerImg.naturalHeight / camServerImg.naturalWidth))
+      );
+
+      finishCameraOpen(camServerImg.naturalWidth, camServerImg.naturalHeight);
+      return true;
+    }
+
+    /** Selesai membuka sumber frame: reset box, tampilkan player. */
+    function finishCameraOpen(width, height) {
+      camDetections = [];
+      camDetFrame = { w: 0, h: 0 };
+      cRes.textContent = `${width} × ${height}`;
+      camPlaceholder.style.display = "none";
+      camStats.style.display = "flex";
+      camPlayer.style.display = "block";
+      paintCameraFrame();
+      updateCamStatus();
+    }
+
+    /* ---------------- Mulai / hentikan deteksi ---------------- */
+    cameraStartBtn.addEventListener("click", async () => {
+      // Klik kedua saat masih menyiapkan = batalkan (mis. prompt izin
+      // browser tidak kunjung dijawab)
+      if (camStarting) {
+        cancelCameraStart();
+        showCamError("Penyiapan kamera dibatalkan. Klik Mulai Deteksi untuk mencoba lagi.");
+        return;
+      }
+      if (camDetecting) {
+        stopCameraDetection("Kamera nonaktif");
+        return;
+      }
+      if (!cameraSelect.value) {
+        showCamError(
+          camRefreshing
+            ? "Masih mendeteksi kamera — tunggu sebentar lalu klik Mulai Deteksi lagi."
+            : "Pilih kamera dulu di dropdown."
+        );
+        return;
+      }
+      const token = ++camStartToken;
+      camStarting = true;
+      try {
+        await startCameraDetection(true, token);
+      } finally {
+        if (token === camStartToken) camStarting = false;
+      }
+    });
+
+    /** Batalkan penyiapan kamera yang masih berjalan. */
+    function cancelCameraStart() {
+      camStartToken += 1;
+      camStarting = false;
+      cameraStartBtn.disabled = false;
+      cameraStartBtn.textContent = "Mulai Deteksi";
+      releaseCamera();
+    }
+
+    async function startCameraDetection(allowFallback, token) {
+      const startToken = token === undefined ? camStartToken : token;
+
+      // Tombol TETAP aktif selama menyiapkan: klik = batalkan (penting kalau
+      // prompt izin browser tidak kunjung dijawab).
+      cameraStartBtn.disabled = false;
+      cameraStartBtn.innerHTML = '<span class="spinner"></span>Batalkan';
+      hideCamError();
+
+      const choice = cameraSelect.value || "";
+      const [mode, key] = choice.split(":");
+
+      try {
+        const opened = mode === "server"
+          ? await openServerCamera(Number(key), startToken)
+          : await openBrowserCamera(key || "", startToken);
+
+        // Start dibatalkan (klik kedua / pindah tab) saat kamera dibuka
+        if (!opened) return;
+
+        camDetecting = true;
+        camDetectedFrames = 0;
+        camDetectStart = performance.now();
+        camDetectErrors = 0;
+        camRetryNotBefore = 0;
+
+        cameraStartBtn.disabled = false;
+        cameraStartBtn.textContent = "Hentikan Deteksi";
+        setCamBadge("LIVE — deteksi berjalan", false);
+        startCameraLoop();
+        paintCameraFrame();
+      } catch (err) {
+        if (startToken !== camStartToken) return; // sudah dibatalkan
+
+        releaseCamera();
+        camPlayer.style.display = "none";
+        camPlaceholder.style.display = "block";
+        camStats.style.display = "none";
+        cameraStartBtn.disabled = false;
+        cameraStartBtn.textContent = "Mulai Deteksi";
+        showCamError(cameraErrorMessage(err));
+
+        if (allowFallback && mode !== "server") {
+          await fallbackToServerCamera(err, startToken);
+        }
+      }
+    }
+
+    /**
+     * Browser menolak / tidak menampilkan izin kamera -> otomatis pakai
+     * kamera server kalau ada. Ini yang membuat fitur tetap jalan tanpa
+     * harus mengurus izin browser.
+     */
+    async function fallbackToServerCamera(err, token) {
+      const name = (err && err.name) || "";
+      const permissionIssue = [
+        "NotAllowedError",
+        "SecurityError",
+        "NotFoundError",
+        "PermissionTimeoutError",
+        "NotSupportedError",
+      ].includes(name);
+      if (!permissionIssue) return;
+
+      const server = camServerCameras.find((cam) => !cam.busy) || camServerCameras[0];
+      if (!server) return;
+
+      cameraSelect.value = `server:${server.index}`;
+      showCamError("Browser tidak memberi akses kamera — beralih ke kamera server.");
+      await startCameraDetection(false, token);
+    }
+
+    function stopCameraDetection(message) {
+      camDetecting = false;
+      camBusy = false;
+      camDetectErrors = 0;
+      camRetryNotBefore = 0;
+      camDetections = [];
+      camDetFrame = { w: 0, h: 0 };
+      stopCameraLoop();
+      releaseCamera();
+      camPlayer.style.display = "none";
+      camPlaceholder.style.display = "block";
+      camStats.style.display = "none";
+      camChips.innerHTML = "";
+      camCtx.clearRect(0, 0, camCanvas.width, camCanvas.height);
+      cameraStartBtn.textContent = "Mulai Deteksi";
+      cameraStartBtn.disabled = !cameraSelect.value;
+      hideCamError();
+      setCamBadge(message || "Kamera nonaktif", true);
+      resetCamStats();
+      updateCamStatus();
+    }
+
+    /* ---------------- Ganti kamera saat deteksi berjalan ---------------- */
+    cameraSelect.addEventListener("change", async () => {
+      // Status izin mengikuti sumber yang dipilih
+      updateCamStatus();
+      if (!camDetecting || camSwitching) return;
+      camSwitching = true;
+      const [mode, key] = (cameraSelect.value || "").split(":");
+      try {
+        hideCamError();
+        if (mode === "server") {
+          await openServerCamera(Number(key));
+        } else {
+          await openBrowserCamera(key || "");
+        }
+        setCamBadge("LIVE — deteksi berjalan", false);
+        paintCameraFrame();
+      } catch (err) {
+        stopCameraDetection("Kamera nonaktif");
+        showCamError(cameraErrorMessage(err));
+      } finally {
+        camSwitching = false;
+      }
+    });
+
+    cameraRefreshBtn.addEventListener("click", async () => {
+      hideCamError();
+      camServerCameras = await listServerCameras(true); // paksa probe ulang
+      await refreshCameraList();
+      if (!cameraSelect.value) {
+        showCamError(
+          "Tidak ada kamera yang terdeteksi. Colokkan kamera, tutup aplikasi yang " +
+          "memakainya, lalu klik muat ulang."
+        );
+      }
+    });
+
+    /* ---------------- Loop render + deteksi ---------------- */
+    function startCameraLoop() {
+      if (camRafId !== null) return;
+      const tick = () => {
+        camRafId = requestAnimationFrame(tick);
+        paintCameraFrame();
+        maybeDetectCamera();
+      };
+      camRafId = requestAnimationFrame(tick);
+    }
+
+    function stopCameraLoop() {
+      if (camRafId !== null) {
+        cancelAnimationFrame(camRafId);
+        camRafId = null;
+      }
+    }
+
+    /** Gambar frame kamera yang sedang tampil + box hasil deteksi terakhir. */
+    function paintCameraFrame() {
+      const size = camSourceSize();
+      if (!size.w || !size.h || !camCanvas.width) return;
+      camCtx.drawImage(camSource(), 0, 0, camCanvas.width, camCanvas.height);
+      drawBoxes(camCtx, camDetections, camDetFrame, camCanvas.width, camCanvas.height);
+    }
+
+    /**
+     * Kirim frame kamera untuk dideteksi. Tidak ada pembatas laju: setiap
+     * frame dikirim selama tidak ada request yang masih berjalan, jadi
+     * deteksi selalu mengikuti frame terbaru.
+     */
+    function maybeDetectCamera() {
+      if (!camDetecting || camBusy) return;
+      if (panelCamera.style.display === "none") return;
+      if (performance.now() < camRetryNotBefore) return;
+
+      camBusy = true;
+      sendCameraFrame();
+    }
+
+    async function sendCameraFrame() {
+      try {
+        const size = camSourceSize();
+        // Sumber baru (mis. habis ganti kamera) belum mengirim frame:
+        // lewati request ini, jangan dihitung sebagai error.
+        if (!size.w || !size.h) return;
+
+        camSendCtx.drawImage(camSource(), 0, 0, camSendCanvas.width, camSendCanvas.height);
+        const image = camSendCanvas.toDataURL("image/jpeg", 0.7);
+
+        const res = await fetch("/api/camera/detect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image,
+            conf: Number(cameraConf.value),
+            model: modelChoice.camera,
+            // Box digambar di browser di atas frame kamera yang sedang
+            // berjalan, jadi frame beranotasi dari server tidak perlu.
+            return_image: false,
+          }),
+        });
+
+        const data = await parseJson(res);
+        if (!res.ok) throw new Error(data.error || "Gagal mendeteksi frame kamera.");
+        if (!camDetecting) return; // sesi sudah dihentikan saat request berjalan
+
+        hideCamError();
+        camRetryNotBefore = 0;
+        camDetectErrors = 0;
+
+        camDetections = Array.isArray(data.detections) ? data.detections : [];
+        camDetFrame = {
+          w: Number(data.frame_width) || camSendCanvas.width,
+          h: Number(data.frame_height) || camSendCanvas.height,
+        };
+        paintCameraFrame();
+
+        camDetectedFrames += 1;
+        updateCamStats(data);
+      } catch (err) {
+        camDetectErrors += 1;
+
+        // Server dev restart otomatis tiap kali kode diubah dan memutus
+        // request yang sedang jalan -> beri jeda makin panjang, coba lagi.
+        camRetryNotBefore = performance.now() + Math.min(400 * camDetectErrors, 3000);
+
+        if (isTransientError(err)) {
+          showCamError("Koneksi ke server terputus — mencoba lagi…");
+          if (camDetectErrors >= 15) {
+            stopCameraDetection("Kamera nonaktif");
+            showCamError("Koneksi ke server hilang — deteksi kamera dihentikan.");
+          }
+        } else {
+          showCamError(err.message);
+          if (camDetectErrors >= 5) {
+            stopCameraDetection("Kamera nonaktif");
+            showCamError(err.message);
+          }
+        }
+      } finally {
+        camBusy = false;
+      }
+    }
+
+    function updateCamStats(data) {
+      cObjects.textContent = `${data.total_objects} objek`;
+      cInfer.textContent = `${data.inference_ms} ms`;
+
+      const secs = (performance.now() - camDetectStart) / 1000;
+      const rate = secs > 0 ? camDetectedFrames / secs : 0;
+      cFps.textContent = `${rate.toFixed(1)} fps deteksi`;
+
+      camChips.innerHTML = "";
+      const entries = Object.entries(data.counts || {});
+      if (entries.length === 0) {
+        camChips.innerHTML = '<span class="chip">Tidak ada objek</span>';
+      } else {
+        entries.forEach(([label, n]) => {
+          const el = document.createElement("span");
+          el.className = "chip";
+          el.innerHTML = `${label} <b>×${n}</b>`;
+          camChips.appendChild(el);
+        });
+      }
+    }
+
+    function resetCamStats() {
+      cRes.textContent = "— × —";
+      cObjects.textContent = "0 objek";
+      cInfer.textContent = "— ms";
+      cFps.textContent = "— fps deteksi";
+    }
+
+    function setCamBadge(text, paused) {
+      camBadgeText.textContent = text;
+      camBadge.classList.toggle("paused", !!paused);
+      camBadge.classList.toggle("live", !paused);
+    }
+
+    cameraResetBtn.addEventListener("click", () => {
+      if (camDetecting) stopCameraDetection("Kamera nonaktif");
+      else releaseCamera();
+      camPlayer.style.display = "none";
+      camPlaceholder.style.display = "block";
+      camStats.style.display = "none";
+      camCtx.clearRect(0, 0, camCanvas.width, camCanvas.height);
+      camDetections = [];
+      camDetFrame = { w: 0, h: 0 };
+      camChips.innerHTML = "";
+      resetCamStats();
+      hideCamError();
+      cameraStartBtn.textContent = "Mulai Deteksi";
+      refreshCameraList();
+    });
+
+    // Stream kamera server terputus (kamera dicabut / server restart)
+    camServerImg.addEventListener("error", () => {
+      if (!camDetecting || camMode !== "server") return;
+      stopCameraDetection("Kamera terputus");
+      showCamError("Stream kamera server terputus. Klik Mulai Deteksi lagi.");
+    });
+
+    // Kamera dipasang/dicabut (USB, virtual cam) -> segarkan daftar
+    if (mediaSupported()) {
+      navigator.mediaDevices.addEventListener("devicechange", () => {
+        if (panelCamera.style.display === "none") return;
+        if (camStarting || camSwitching) return;
+        refreshCameraList();
+      });
+    }
+
+    // Ikuti perubahan izin kamera (mis. user klik Allow di address bar)
+    if (mediaSupported() && navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: "camera" }).then((status) => {
+        status.onchange = () => {
+          browserPermission = status.state;
+          if (panelCamera.style.display !== "none") refreshCameraList();
+          else updateCamStatus();
+        };
+      }).catch(() => {});
+    }
+
+    // Lepas kamera saat halaman ditinggalkan / ditutup
+    window.addEventListener("pagehide", () => {
+      const serverId = camServerId;
+      if (camStarting) cancelCameraStart();
+      if (camDetecting) stopCameraDetection("Kamera nonaktif");
+      else releaseCamera();
+
+      // fetch() bisa ikut batal saat navigasi; sendBeacon tetap terkirim
+      if (serverId && navigator.sendBeacon) {
+        try {
+          const body = new Blob(
+            [JSON.stringify({ session_id: serverId })],
+            { type: "application/json" }
+          );
+          navigator.sendBeacon("/api/camera/close", body);
+        } catch (err) { /* abaikan */ }
+      }
+    });
+
+    function showCamError(msg) {
+      camError.textContent = msg;
+      camError.style.display = "block";
+    }
+
+    function hideCamError() {
+      camError.style.display = "none";
+    }
+
+    /* ==================================================================
+       URL — deteksi dari link: gambar, video YouTube, atau IP camera.
+
+       Gambar  : diunduh & dideteksi server sekali, hasilnya tampil di
+                 bagian "Hasil Deteksi".
+       Video / : server menarik streamnya (yt-dlp untuk YouTube, FFmpeg
+       IP cam    untuk RTSP/HLS/HTTP), browser menampilkan sebagai MJPEG,
+                 lalu tiap frame dikirim ke /api/camera/detect.
+       ================================================================== */
+    const urlInput = document.getElementById("urlInput");
+    const urlDetectBtn = document.getElementById("urlDetectBtn");
+    const urlStopBtn = document.getElementById("urlStopBtn");
+    const urlResetBtn = document.getElementById("urlResetBtn");
+    const urlPlayer = document.getElementById("urlPlayer");
+    const urlStreamImg = document.getElementById("urlStreamImg");
+    const urlCanvas = document.getElementById("urlCanvas");
+    const urlCtx = urlCanvas.getContext("2d");
+    const urlBadge = document.getElementById("urlBadge");
+    const urlBadgeText = document.getElementById("urlBadgeText");
+    const urlPlaceholder = document.getElementById("urlPlaceholder");
+    const urlStats = document.getElementById("urlStats");
+    const uSource = document.getElementById("uSource");
+    const uRes = document.getElementById("uRes");
+    const uObjects = document.getElementById("uObjects");
+    const uInfer = document.getElementById("uInfer");
+    const uFps = document.getElementById("uFps");
+    const urlChips = document.getElementById("urlChips");
+    const urlResult = document.getElementById("urlResult");
+    const urlError = document.getElementById("urlError");
+
+    const urlSendCanvas = document.createElement("canvas");
+    const urlSendCtx = urlSendCanvas.getContext("2d");
+    const URL_MAX_SEND_WIDTH = 960;
+    const URL_DEFAULT_HINT =
+      "Tempel link di atas lalu klik <b>Deteksi</b>.<br />" +
+      "Video YouTube / IP camera berjalan otomatis dan dideteksi realtime.";
+
+    let urlSessionId = null;
+    let urlKind = null;          // "stream" | "image"
+    let urlDetecting = false;
+    let urlBusy = false;
+    let urlRafId = null;
+    let urlDetections = [];
+    let urlDetFrame = { w: 0, h: 0 };
+    let urlDetectedFrames = 0;
+    let urlDetectStart = 0;
+    let urlDetectErrors = 0;
+    let urlRetryNotBefore = 0;
+    let urlOpening = false;
+    let urlToken = 0;
+
+    urlDetectBtn.addEventListener("click", openUrlSource);
+    urlStopBtn.addEventListener("click", () => {
+      stopUrlStream("Dihentikan");
+      urlPlaceholder.style.display = "block";
+      urlPlaceholder.innerHTML = URL_DEFAULT_HINT;
+    });
+    urlResetBtn.addEventListener("click", resetUrlPanel);
+    urlInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        openUrlSource();
+      }
+    });
+
+    /** Buka link (gambar / YouTube / IP camera) lalu mulai deteksi. */
+    async function openUrlSource() {
+      const link = (urlInput.value || "").trim();
+      if (!link) {
+        showUrlError("Tempel link dulu (gambar / YouTube / IP camera).");
+        urlInput.focus();
+        return;
+      }
+      if (urlOpening) return;
+
+      stopUrlStream("Memuat…");
+      const token = ++urlToken;
+      urlOpening = true;
+      hideUrlError();
+      urlDetectBtn.disabled = true;
+      urlDetectBtn.innerHTML = '<span class="spinner"></span>Memuat...';
+      urlPlaceholder.style.display = "none";
+      urlPlayer.style.display = "none";
+      urlStats.style.display = "none";
+      urlChips.innerHTML = "";
+      urlResult.style.display = "none";
+
+      try {
+        const res = await fetch("/api/url/open", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: link, model: modelChoice.url }),
+        });
+        const data = await parseJson(res);
+        if (!res.ok) throw new Error(data.error || "Link tidak bisa dibuka.");
+        if (token !== urlToken) return;
+
+        // ---- Gambar: hasil tampil di bagian "Hasil Deteksi Gambar" ----
+        if (data.kind === "image") {
+          urlKind = "image";
+          urlPlaceholder.style.display = "block";
+          urlPlaceholder.innerHTML =
+            "Deteksi selesai — hasil gambar ada di bagian " +
+            "<b>Hasil Deteksi Gambar</b> di bawah.";
+          renderResult(data, "url");
+          return;
+        }
+
+        // ---- Video / YouTube / IP camera ----
+        urlKind = "stream";
+        urlSessionId = data.session_id;
+        uSource.textContent = data.title || link;
+        uSource.title = link;
+
+        urlStreamImg.src = `${data.stream}?t=${Date.now()}`;
+        await waitForImageFrame(urlStreamImg);
+        if (token !== urlToken) {
+          // dibatalkan / link lain dipilih saat menunggu frame
+          fetch(`/api/url/${data.session_id}`, { method: "DELETE" }).catch(() => {});
+          return;
+        }
+
+        urlCanvas.width = urlStreamImg.naturalWidth;
+        urlCanvas.height = urlStreamImg.naturalHeight;
+        urlSendCanvas.width = Math.min(urlStreamImg.naturalWidth, URL_MAX_SEND_WIDTH);
+        urlSendCanvas.height = Math.max(
+          1,
+          Math.round(
+            urlSendCanvas.width * (urlStreamImg.naturalHeight / urlStreamImg.naturalWidth)
+          )
+        );
+
+        urlDetections = [];
+        urlDetFrame = { w: 0, h: 0 };
+        urlDetectedFrames = 0;
+        urlDetectErrors = 0;
+        urlRetryNotBefore = 0;
+        urlDetectStart = performance.now();
+        urlDetecting = true;
+
+        uRes.textContent = `${urlCanvas.width} × ${urlCanvas.height}`;
+        uObjects.textContent = "0 objek";
+        uInfer.textContent = "— ms";
+        uFps.textContent = "— fps deteksi";
+        urlPlayer.style.display = "block";
+        urlStats.style.display = "flex";
+        urlStopBtn.disabled = false;
+        setUrlBadge(data.is_live ? "LIVE — deteksi berjalan" : "Deteksi berjalan", false);
+        paintUrlFrame();
+        startUrlLoop();
+      } catch (err) {
+        if (token !== urlToken) return;
+        stopUrlStream("Siap");
+        urlPlaceholder.style.display = "block";
+        urlPlaceholder.innerHTML = URL_DEFAULT_HINT;
+        showUrlError(err.message || "Link tidak bisa dibuka.");
+      } finally {
+        if (token === urlToken) {
+          urlOpening = false;
+          urlDetectBtn.disabled = false;
+          urlDetectBtn.textContent = "Deteksi";
+        }
+      }
+    }
+
+    /** Hentikan stream URL + lepas sesi di server. */
+    function stopUrlStream(message) {
+      urlToken += 1;                 // batalkan proses buka yang masih jalan
+      urlOpening = false;
+      urlDetecting = false;
+      urlBusy = false;
+      urlDetectErrors = 0;
+      urlRetryNotBefore = 0;
+      stopUrlLoop();
+
+      urlDetections = [];
+      urlDetFrame = { w: 0, h: 0 };
+      urlKind = null;
+      urlStreamImg.removeAttribute("src");
+
+      if (urlSessionId) {
+        const id = urlSessionId;
+        urlSessionId = null;
+        fetch(`/api/url/${id}`, { method: "DELETE" }).catch(() => {});
+      }
+
+      urlPlayer.style.display = "none";
+      urlStats.style.display = "none";
+      urlChips.innerHTML = "";
+      urlCtx.clearRect(0, 0, urlCanvas.width, urlCanvas.height);
+      urlStopBtn.disabled = true;
+      urlDetectBtn.disabled = false;
+      urlDetectBtn.textContent = "Deteksi";
+      setUrlBadge(message || "Siap", true);
+    }
+
+    function resetUrlPanel() {
+      stopUrlStream("Siap");
+      urlInput.value = "";
+      urlPlaceholder.style.display = "block";
+      urlPlaceholder.innerHTML = URL_DEFAULT_HINT;
+      hideUrlError();
+      urlResult.style.display = "none";
+      urlInput.focus();
+    }
+
+    /* ---------------- Loop render + deteksi ---------------- */
+    function startUrlLoop() {
+      if (urlRafId !== null) return;
+      const tick = () => {
+        urlRafId = requestAnimationFrame(tick);
+        paintUrlFrame();
+        maybeDetectUrl();
+      };
+      urlRafId = requestAnimationFrame(tick);
+    }
+
+    function stopUrlLoop() {
+      if (urlRafId !== null) {
+        cancelAnimationFrame(urlRafId);
+        urlRafId = null;
+      }
+    }
+
+    function paintUrlFrame() {
+      if (!urlStreamImg.naturalWidth || !urlCanvas.width) return;
+      urlCtx.drawImage(urlStreamImg, 0, 0, urlCanvas.width, urlCanvas.height);
+      drawBoxes(urlCtx, urlDetections, urlDetFrame, urlCanvas.width, urlCanvas.height);
+    }
+
+    function maybeDetectUrl() {
+      if (!urlDetecting || urlBusy) return;
+      if (panelUrl.style.display === "none") return;
+      if (performance.now() < urlRetryNotBefore) return;
+
+      urlBusy = true;
+      sendUrlFrame();
+    }
+
+    async function sendUrlFrame() {
+      try {
+        if (!urlStreamImg.naturalWidth) return;
+
+        urlSendCtx.drawImage(urlStreamImg, 0, 0, urlSendCanvas.width, urlSendCanvas.height);
+        const image = urlSendCanvas.toDataURL("image/jpeg", 0.7);
+
+        const res = await fetch("/api/camera/detect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image,
+            model: modelChoice.url,
+            return_image: false,
+          }),
+        });
+        const data = await parseJson(res);
+        if (!res.ok) throw new Error(data.error || "Gagal mendeteksi frame.");
+        if (!urlDetecting) return;
+
+        hideUrlError();
+        urlRetryNotBefore = 0;
+        urlDetectErrors = 0;
+
+        urlDetections = Array.isArray(data.detections) ? data.detections : [];
+        urlDetFrame = {
+          w: Number(data.frame_width) || urlSendCanvas.width,
+          h: Number(data.frame_height) || urlSendCanvas.height,
+        };
+        paintUrlFrame();
+
+        urlDetectedFrames += 1;
+        updateUrlStats(data);
+      } catch (err) {
+        urlDetectErrors += 1;
+        urlRetryNotBefore = performance.now() + Math.min(400 * urlDetectErrors, 3000);
+
+        if (isTransientError(err)) {
+          showUrlError("Koneksi ke server terputus — mencoba lagi…");
+          if (urlDetectErrors >= 15) stopUrlStream("Dihentikan");
+        } else {
+          showUrlError(err.message);
+          if (urlDetectErrors >= 5) stopUrlStream("Dihentikan");
+        }
+      } finally {
+        urlBusy = false;
+      }
+    }
+
+    function updateUrlStats(data) {
+      uObjects.textContent = `${data.total_objects} objek`;
+      uInfer.textContent = `${data.inference_ms} ms`;
+
+      const secs = (performance.now() - urlDetectStart) / 1000;
+      const rate = secs > 0 ? urlDetectedFrames / secs : 0;
+      uFps.textContent = `${rate.toFixed(1)} fps deteksi`;
+
+      urlChips.innerHTML = "";
+      const entries = Object.entries(data.counts || {});
+      if (entries.length === 0) {
+        urlChips.innerHTML = '<span class="chip">Tidak ada objek</span>';
+      } else {
+        entries.forEach(([label, n]) => {
+          const el = document.createElement("span");
+          el.className = "chip";
+          el.innerHTML = `${label} <b>×${n}</b>`;
+          urlChips.appendChild(el);
+        });
+      }
+    }
+
+    function setUrlBadge(text, paused) {
+      urlBadgeText.textContent = text;
+      urlBadge.classList.toggle("paused", !!paused);
+      urlBadge.classList.toggle("live", !paused);
+    }
+
+    function showUrlError(msg) {
+      urlError.textContent = msg;
+      urlError.style.display = "block";
+    }
+
+    function hideUrlError() {
+      urlError.style.display = "none";
+    }
+
+    // Stream MJPEG putus (link mati / server restart)
+    urlStreamImg.addEventListener("error", () => {
+      if (!urlDetecting) return;
+      stopUrlStream("Stream terputus");
+      urlPlaceholder.style.display = "block";
+      urlPlaceholder.innerHTML = URL_DEFAULT_HINT;
+      showUrlError("Stream dari link itu terputus. Klik Deteksi lagi.");
+    });
+
+    // Lepas sesi URL saat halaman ditutup / di-reload
+    window.addEventListener("pagehide", () => {
+      const id = urlSessionId;
+      if (!id) return;
+      if (navigator.sendBeacon) {
+        try {
+          const body = new Blob([JSON.stringify({ session_id: id })], {
+            type: "application/json",
+          });
+          navigator.sendBeacon("/api/url/close", body);
+        } catch (err) { /* abaikan */ }
+      }
+    });
+
+    /* ---------------- Utilitas ---------------- */
+    async function parseJson(res) {
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        // Server membalas HTML (mis. 404 halaman) -> beri pesan yang jelas
+        throw new Error(
+          `Respons server bukan JSON (HTTP ${res.status}). ` +
+          "Pastikan server Flask yang berjalan adalah versi terbaru — restart app.py."
+        );
+      }
+    }
+
+    function showVideoError(msg) {
+      videoError.textContent = msg;
+      videoError.style.display = "block";
+    }
+
+    function hideVideoError() {
+      videoError.style.display = "none";
+    }
+
+
+    /* ==================================================================
+       TEMA: dark / light
+       ================================================================== */
+    const themeToggle = document.getElementById("themeToggle");
+    const themeQuery = window.matchMedia("(prefers-color-scheme: light)");
+
+    function currentTheme() {
+      return document.documentElement.getAttribute("data-theme") || "dark";
+    }
+
+    function applyTheme(theme, persist) {
+      document.documentElement.setAttribute("data-theme", theme);
+      themeToggle.setAttribute(
+        "aria-label",
+        theme === "dark" ? "Aktifkan mode terang" : "Aktifkan mode gelap"
+      );
+      themeToggle.title = theme === "dark" ? "Mode terang" : "Mode gelap";
+      if (persist) {
+        try {
+          localStorage.setItem("theme", theme);
+        } catch (e) { /* abaikan */ }
+      }
+    }
+
+    // Sinkronkan label dengan tema yang sudah dipasang di <head>
+    applyTheme(currentTheme(), false);
+
+    themeToggle.addEventListener("click", () => {
+      applyTheme(currentTheme() === "dark" ? "light" : "dark", true);
+    });
+
+    // Ikuti perubahan preferensi OS hanya jika user belum memilih manual
+    themeQuery.addEventListener("change", (e) => {
+      let saved = null;
+      try {
+        saved = localStorage.getItem("theme");
+      } catch (err) { /* abaikan */ }
+      if (!saved) applyTheme(e.matches ? "light" : "dark", false);
+    });
+  </script>
+</body>
+</html>
