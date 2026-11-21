@@ -21,6 +21,31 @@ Web app sederhana untuk deteksi objek pada gambar, video, kamera, dan link (URL)
 - Ringkasan jumlah objek per kelas + tabel detail dengan bar visual
 - Waktu inference dan laju deteksi (fps) ditampilkan
 
+## Screenshot
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="screenshots/screenshot_1.png" alt="Tab Gambar — hasil deteksi berdampingan" width="100%"><br>
+      <sub><b>Tab Gambar</b> — gambar asli dan hasil anotasi tampil berdampingan, dilengkapi ringkasan kelas dan tabel confidence.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="screenshots/screenshot_3.png" alt="Tab Video — deteksi realtime saat video diputar" width="100%"><br>
+      <sub><b>Tab Video</b> — deteksi berjalan mengikuti playback (play / pause / seek) dan bisa memakai model <code>.pt</code> sendiri.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="screenshots/screenshot_2.png" alt="Tab Kamera — deteksi live dari webcam" width="100%"><br>
+      <sub><b>Tab Kamera</b> — deteksi live dari kamera browser maupun kamera server, ganti kamera tanpa menghentikan deteksi.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="screenshots/screenshot_4.png" alt="Tab URL — deteksi dari link gambar, YouTube, IP camera" width="100%"><br>
+      <sub><b>Tab URL</b> — tempel link gambar, video YouTube, atau IP camera (RTSP/HLS) lalu deteksi otomatis.</sub>
+    </td>
+  </tr>
+</table>
+
 ## Struktur
 
 ```
@@ -28,6 +53,7 @@ app.py                  # Backend Flask + endpoint deteksi
 templates/index.html    # UI (HTML + CSS + JS, tanpa build step)
 static/uploads/         # Gambar / video yang diupload (auto-dibuat)
 static/results/         # Gambar hasil deteksi (auto-dibuat)
+screenshots/            # Tangkapan layar untuk README
 yolo26n.pt              # Model weight
 requirements.txt
 ```
