@@ -5,11 +5,17 @@ runs/
 static/uploads/
 static/results/
 models/
-yoloWeight/
 self_note_ignore/
 server.log
 server.err.log
 *.log
+
+# Weight YOLO (.pt) — file besar, jangan ikut ke repo
+yoloWeight/
+yolo26n.pt
+
+# Catatan perintah lokal
+yoloCommand.txt
 
 # Media uji (gambar/video contoh, file besar) — jangan ikut ke repo
 test_media_ignore/

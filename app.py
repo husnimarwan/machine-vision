@@ -44,7 +44,20 @@ RESULT_DIR.mkdir(parents=True, exist_ok=True)
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
-MODEL_PATH = BASE_DIR / "yolo26n.pt"
+WEIGHT_DIR = BASE_DIR / "yoloWeight"     # weight YOLO (.pt) — tidak ikut repo
+DEFAULT_MODEL_NAME = "yolo26n.pt"
+
+
+def _default_model_path() -> Path:
+    """Weight default dicari di yoloWeight/ dulu, lalu root proyek (struktur lama)."""
+    for folder in (WEIGHT_DIR, BASE_DIR):
+        candidate = folder / DEFAULT_MODEL_NAME
+        if candidate.exists():
+            return candidate
+    return WEIGHT_DIR / DEFAULT_MODEL_NAME
+
+
+MODEL_PATH = _default_model_path()
 MODEL_DIR = BASE_DIR / "models"          # model .pt hasil upload user
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 CONF_THRESHOLD = 0.25
@@ -65,7 +78,10 @@ app = Flask(__name__)
 # None = tidak ada batas body request, jadi video berapa pun ukurannya diterima.
 app.config["MAX_CONTENT_LENGTH"] = None
 
-# Model default di-load sekali saat server start (bukan tiap request)
+# Model default di-load sekali saat server start (bukan tiap request).
+# Kalau weight belum ada di yoloWeight/, ultralytics mengunduhnya otomatis.
+if not MODEL_PATH.exists():
+    MODEL_PATH = Path(DEFAULT_MODEL_NAME)
 model = YOLO(str(MODEL_PATH))
 
 MODELS: dict[str, "YOLO"] = {"default": model}

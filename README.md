@@ -54,7 +54,7 @@ templates/index.html    # UI (HTML + CSS + JS, tanpa build step)
 static/uploads/         # Gambar / video yang diupload (auto-dibuat)
 static/results/         # Gambar hasil deteksi (auto-dibuat)
 screenshots/            # Tangkapan layar untuk README
-yolo26n.pt              # Model weight
+yoloWeight/             # Weight YOLO (.pt) — tidak ikut repo (di-gitignore)
 requirements.txt
 ```
 
@@ -65,6 +65,10 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
+
+Weight model tidak disertakan di repo. Taruh file `.pt` (default `yolo26n.pt`)
+di folder `yoloWeight/`; kalau tidak ada, Ultralytics akan mengunduhnya otomatis
+saat server pertama kali dijalankan.
 
 ## Menjalankan
 
