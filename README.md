@@ -2,25 +2,6 @@
 
 Web app sederhana untuk deteksi objek pada gambar, video, kamera, dan link (URL) menggunakan YOLO (Ultralytics) + Flask.
 
-## Fitur
-
-- **Gambar**: upload lewat klik atau drag & drop
-- **Video**: deteksi realtime saat video diputar (play / pause / seek)
-- **Kamera**: pilih kamera yang terpasang (webcam, kamera USB, virtual cam) lalu
-  mulai deteksi realtime — ganti kamera di dropdown tanpa menghentikan deteksi
-- **URL**: tempel link lalu deteksi otomatis
-  - link **gambar** (JPG/PNG/WEBP/…) → hasil anotasi
-  - link **video YouTube** → langsung berjalan & dideteksi realtime
-  - **IP camera** (`rtsp://`, `.m3u8`, stream HTTP) → deteksi realtime
-  - tanpa kontrol playback (langsung jalan)
-- Preview sebelum diproses
-- Slider confidence threshold (0.05 – 0.95)
-- **Pilih model YOLO per tab**: default `yolo26n.pt`, atau pilih file `.pt`
-  sendiri dari PC (diunggah ke server, lalu dipakai khusus tab itu)
-- Tampilan side-by-side: gambar asli vs hasil anotasi (mode gambar)
-- Ringkasan jumlah objek per kelas + tabel detail dengan bar visual
-- Waktu inference dan laju deteksi (fps) ditampilkan
-
 ## Screenshot
 
 <table>
@@ -45,6 +26,25 @@ Web app sederhana untuk deteksi objek pada gambar, video, kamera, dan link (URL)
     </td>
   </tr>
 </table>
+
+## Fitur
+
+- **Gambar**: upload lewat klik atau drag & drop
+- **Video**: deteksi realtime saat video diputar (play / pause / seek)
+- **Kamera**: pilih kamera yang terpasang (webcam, kamera USB, virtual cam) lalu
+  mulai deteksi realtime — ganti kamera di dropdown tanpa menghentikan deteksi
+- **URL**: tempel link lalu deteksi otomatis
+  - link **gambar** (JPG/PNG/WEBP/…) → hasil anotasi
+  - link **video YouTube** → langsung berjalan & dideteksi realtime
+  - **IP camera** (`rtsp://`, `.m3u8`, stream HTTP) → deteksi realtime
+  - tanpa kontrol playback (langsung jalan)
+- Preview sebelum diproses
+- Slider confidence threshold (0.05 – 0.95)
+- **Pilih model YOLO per tab**: default `yolo26n.pt`, atau pilih file `.pt`
+  sendiri dari PC (diunggah ke server, lalu dipakai khusus tab itu)
+- Tampilan side-by-side: gambar asli vs hasil anotasi (mode gambar)
+- Ringkasan jumlah objek per kelas + tabel detail dengan bar visual
+- Waktu inference dan laju deteksi (fps) ditampilkan
 
 ## Struktur
 
